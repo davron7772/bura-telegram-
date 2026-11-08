@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: bura
+    runtime: node
+    plan: free
+    region: frankfurt
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: BOT_TOKEN
+        sync: false
+      - key: APP_SHORT_NAME
+        value: bura
+      - key: TURN_SECONDS
+        value: "30"

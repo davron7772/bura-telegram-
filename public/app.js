@@ -1,0 +1,804 @@
+/* Bura — Telegram Mini App interfeysi */
+(function () {
+  'use strict';
+
+  const E = window.BuraEngine;
+  const DEMO = !!window.BURA_DEMO;
+  const TGW = window.Telegram && window.Telegram.WebApp;
+  const TG = TGW && TGW.initData ? TGW : null;
+  const qs = new URLSearchParams(location.search);
+  const app = document.getElementById('app');
+  const toastEl = document.getElementById('toast');
+  const reduceMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+
+  // Kartadagi belgilar: Tuz, Korol, Dama, Valet
+  const RANK = { A: 'T', K: 'K', Q: 'D', J: 'V', '10': '10', '9': '9', '8': '8', '7': '7', '6': '6' };
+  const RANK_NAME = { A: 'tuz', K: 'korol', Q: 'dama', J: 'valet', '10': 'oʻnlik', '9': 'toʻqqizlik', '8': 'sakkizlik', '7': 'yettilik', '6': 'oltilik' };
+  const SUIT_NAME = { S: 'pika', H: 'chervi', D: 'bubna', C: 'tref' };
+  const SUIT_ORDER = { S: 0, H: 1, C: 2, D: 3 };
+  const SUIT_CHAR = { S: '♠\uFE0E', H: '♥\uFE0E', D: '♦\uFE0E', C: '♣\uFE0E' };
+  const POS = ['b', 'l', 't', 'r']; // men, chapdagi raqib, sherik (roʻparada), oʻngdagi raqib
+  const AVATAR_BG = ['#2a2f57', '#7a2a31', '#1f4a4f', '#5b4223'];
+  const GUL = '<svg class="gul" viewBox="0 0 240 150" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2">' +
+    '<path d="M84 8h72l52 34v66l-52 34H84L32 108V42z"/><path d="M92 24h56l38 24v54l-38 24H92L54 102V48z"/>' +
+    '<path d="M120 38l30 37-30 37-30-37z"/><path d="M120 58l14 17-14 17-14-17z" fill="currentColor"/>' +
+    '<path d="M32 75H6M208 75h26M120 8V0M120 142v8M60 75l-12-10v20zM180 75l12-10v20z"/></g></svg>';
+
+  const S = {
+    screen: 'loading',
+    room: null,
+    invite: '',
+    missing: false,
+    selected: [],
+    sheet: null,
+    sheetAnim: false,
+    lastEventSeq: -1,
+    eventFresh: false,
+    conn: DEMO ? 'open' : 'connecting',
+    deadlineAt: 0,
+    deadlineTotal: 0,
+    seenSlots: new Set(),
+    seenHand: new Set(),
+    handRound: -1,
+    sweeping: false,
+    busy: false,
+    wasMyTurn: false,
+    resultShownFor: -1,
+    resultClosedFor: -1,
+    closingConfirm: false,
+    toastT: null
+  };
+  let T = null; // transport: { send(obj) }
+
+  // ---------- Telegram ----------
+  function initTelegram() {
+    if (!TG) return;
+    try { TG.ready(); TG.expand(); } catch (e) { /* */ }
+    try {
+      if (TG.isVersionAtLeast('6.9')) { TG.setHeaderColor('#1c1f3d'); TG.setBackgroundColor('#1c1f3d'); }
+    } catch (e) { /* */ }
+    try { if (TG.isVersionAtLeast('7.7')) TG.disableVerticalSwipes(); } catch (e) { /* */ }
+  }
+  function haptic(kind) {
+    try {
+      if (!TG || !TG.HapticFeedback || !TG.isVersionAtLeast('6.1')) return;
+      if (kind === 'select') TG.HapticFeedback.selectionChanged();
+      else if (kind === 'success' || kind === 'error' || kind === 'warning') TG.HapticFeedback.notificationOccurred(kind);
+      else TG.HapticFeedback.impactOccurred(kind || 'light');
+    } catch (e) { /* */ }
+  }
+  function setClosingConfirm(on) {
+    if (!TG || S.closingConfirm === on) return;
+    S.closingConfirm = on;
+    try {
+      if (!TG.isVersionAtLeast('6.2')) return;
+      if (on) TG.enableClosingConfirmation(); else TG.disableClosingConfirmation();
+    } catch (e) { /* */ }
+  }
+
+  // ---------- aloqa ----------
+  function startParam() {
+    const sp = TG && TG.initDataUnsafe && TG.initDataUnsafe.start_param;
+    return sp || qs.get('room') || qs.get('tgWebAppStartParam') || '';
+  }
+  function helloMsg() {
+    const m = { t: 'hello', initData: TG ? TG.initData : '', room: (S.room && S.room.id) || startParam() };
+    if (qs.get('dev')) m.dev = { id: qs.get('uid') || String(Math.floor(Math.random() * 1e6)), name: qs.get('name') || 'Mehmon' };
+    return m;
+  }
+
+  function connectWS() {
+    const url = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws';
+    let ws = null, retry = 0, pingT = null, reconnectT = null;
+    function open() {
+      clearTimeout(reconnectT);
+      if (ws && ws.readyState <= 1) return;
+      ws = new WebSocket(url);
+      ws.onopen = function () {
+        retry = 0;
+        setConn('open');
+        ws.send(JSON.stringify(helloMsg()));
+        clearInterval(pingT);
+        pingT = setInterval(function () { if (ws.readyState === 1) ws.send('{"t":"ping"}'); }, 20000);
+      };
+      ws.onmessage = function (e) {
+        let m;
+        try { m = JSON.parse(e.data); } catch (x) { return; }
+        onMessage(m);
+      };
+      ws.onclose = function () {
+        clearInterval(pingT);
+        setConn('closed');
+        reconnectT = setTimeout(open, Math.min(8000, 500 * Math.pow(1.7, retry++)));
+      };
+    }
+    document.addEventListener('visibilitychange', function () {
+      if (!document.hidden && (!ws || ws.readyState > 1)) { retry = 0; open(); }
+    });
+    open();
+    T = {
+      send: function (o) {
+        if (ws && ws.readyState === 1) ws.send(JSON.stringify(o));
+        else { toast('Aloqa yoʻq. Qayta ulanmoqda…'); S.busy = false; }
+      }
+    };
+  }
+
+  // Demo: hammasi brauzerda, kompyuter oʻyinchilari bilan
+  function connectLocal() {
+    const me = { id: 'me', name: 'Siz' };
+    let pushT = null;
+    const room = new window.BuraRoom.Room({
+      id: 'demo', turnSeconds: 60, botDelay: [750, 1300],
+      onChange: function () {
+        if (pushT) return;
+        pushT = setTimeout(function () { pushT = null; onMessage({ t: 'state', room: room.snapshot('me'), invite: '' }); }, 0);
+      }
+    });
+    T = {
+      send: function (m) {
+        if (m.t === 'ping') return;
+        const err = room.dispatch('me', m);
+        if (err) setTimeout(function () { onMessage({ t: 'error', msg: err }); }, 0);
+      }
+    };
+    room.connect(me);
+    room.addBot('me');
+    room.addBot('me');
+  }
+
+  function setConn(c) {
+    if (S.conn === c) return;
+    S.conn = c;
+    if (S.screen !== 'loading') render();
+  }
+
+  function send(obj, busy) {
+    if (!T) return;
+    if (busy) S.busy = true;
+    T.send(obj);
+    if (busy) renderActions();
+  }
+
+  // ---------- serverdan kelgan xabarlar ----------
+  function onMessage(m) {
+    if (m.t === 'state') setRoom(m.room, m.invite);
+    else if (m.t === 'home') { S.screen = 'home'; S.room = null; S.missing = !!m.missing; render(); }
+    else if (m.t === 'auth_error') { S.screen = 'auth'; render(); }
+    else if (m.t === 'error') { S.busy = false; toast(m.msg); haptic('error'); renderActions(); }
+  }
+
+  function isActor(g, s) {
+    if (!g || s < 0) return false;
+    return (g.phase === 'lead' && !g.trick && g.leader === s) || (g.phase === 'follow' && g.turn === s);
+  }
+  function posOf(r, s) {
+    const base = r.mySeat >= 0 ? r.mySeat : 0;
+    return POS[(s - base + 4) % 4];
+  }
+  function teamName(r, team) {
+    if (r.myTeam < 0) return (team + 1) + '-jamoa';
+    return team === r.myTeam ? 'Sizning jamoangiz' : 'Raqiblar';
+  }
+
+  function setRoom(room, invite) {
+    const prev = S.room;
+    S.room = room;
+    if (invite) S.invite = invite;
+    S.screen = 'room';
+    S.busy = false;
+    const g = room.game;
+
+    if (room.round !== S.handRound) {
+      S.handRound = room.round;
+      S.seenHand = new Set();
+      S.seenSlots = new Set();
+      S.selected = [];
+    }
+    S.selected = g && g.hand ? S.selected.filter(function (c) { return g.hand.indexOf(c) >= 0; }) : [];
+    S.deadlineAt = room.deadlineIn ? Date.now() + room.deadlineIn : 0;
+    S.deadlineTotal = room.deadlineTotal || 0;
+
+    S.eventFresh = false;
+    if (room.event && room.event.seq !== S.lastEventSeq) {
+      S.lastEventSeq = room.event.seq;
+      S.eventFresh = true;
+      onEvent(room.event, room);
+    }
+    const myTurn = room.phase === 'playing' && isActor(g, room.mySeat);
+    if (myTurn && !S.wasMyTurn) haptic('medium');
+    S.wasMyTurn = myTurn;
+    setClosingConfirm(room.phase === 'playing' && room.mySeat >= 0);
+
+    if (room.phase === 'roundEnd' && S.resultShownFor !== room.round && S.resultClosedFor !== room.round) {
+      S.resultShownFor = room.round;
+      S.sheet = { type: 'result' };
+      S.sheetAnim = true;
+    }
+    if (S.sheet && S.sheet.type === 'result' && room.phase !== 'roundEnd') S.sheet = null;
+
+    if (S.sweeping) return; // animatsiya tugagach chiziladi
+    const pg = prev && prev.game;
+    if (!reduceMotion && pg && pg.phase === 'trickEnd' && pg.trick && g && prev.round === room.round &&
+        (g.trickNo !== pg.trickNo || g.phase === 'roundEnd')) {
+      const el = document.getElementById('trick');
+      if (el) {
+        S.sweeping = true;
+        el.classList.add('sweep', 'to-' + posOf(prev, pg.trick.winner));
+        setTimeout(function () { S.sweeping = false; render(); }, 330);
+        return;
+      }
+    }
+    render();
+  }
+
+  function onEvent(ev, room) {
+    const list = [ev].concat(ev.also || []);
+    for (const e of list) {
+      if (e.kind === 'reveal') {
+        toast('Yopiq karta: ' + RANK[E.rankOf(e.card)] + ' ' + SUIT_CHAR[E.suitOf(e.card)] + (e.from !== e.to ? ' — koʻzir endi ' + SUIT_CHAR[e.to] : ' — koʻzir oʻzgarmadi'));
+        haptic('warning');
+      }
+    }
+    if (ev.kind === 'win' || ev.kind === 'aces') haptic(room.myTeam === ev.team ? 'success' : 'error');
+    else if (ev.kind === 'bura') haptic('heavy');
+    else if (ev.kind === 'beat' && ev.seat !== room.mySeat) haptic('light');
+  }
+
+  // ---------- yordamchilar ----------
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+  function suitSvg(s, cls) { return '<svg class="' + (cls || '') + '" aria-hidden="true"><use href="#s-' + s + '"/></svg>'; }
+  function suitInline(s) { return s ? suitSvg(s, s === 'H' || s === 'D' ? 'red' : '') : ''; }
+  function iconSvg(id) { return '<svg aria-hidden="true"><use href="#' + id + '"/></svg>'; }
+  function cardName(c) { return RANK_NAME[E.rankOf(c)] + ' ' + SUIT_NAME[E.suitOf(c)]; }
+  function seatName(r, s) { return r.seats[s] ? r.seats[s].name : '?'; }
+  function firstLetter(name) { const ch = Array.from(String(name || '?').trim())[0] || '?'; return ch.toUpperCase(); }
+  function repeat(str, n) { let o = ''; for (let i = 0; i < n; i++) o += str; return o; }
+
+  function cardHTML(c, o) {
+    o = o || {};
+    const r = E.rankOf(c), s = E.suitOf(c), d = RANK[r];
+    const small = o.size === 'sm' || o.size === 'xs';
+    const court = r === 'K' || r === 'Q' || r === 'J';
+    const red = s === 'H' || s === 'D';
+    const tag = o.tag || 'div';
+    const cls = 'card face' + (red ? ' red' : '') + (o.size ? ' ' + o.size : '') + (o.cls ? ' ' + o.cls : '');
+    let h = '<' + tag + (tag === 'button' ? ' type="button"' : '') + ' class="' + cls + '" data-c="' + c + '" aria-label="' + cardName(c) + '"' + (o.attrs || '') + '>' +
+      '<span class="ix"><b>' + d + '</b>' + suitSvg(s) + '</span>' +
+      '<span class="mid">' + (court ? '<i class="court">' + d + '</i>' : suitSvg(s)) + '</span>';
+    if (!small) h += '<span class="ix ix2"><b>' + d + '</b>' + suitSvg(s) + '</span>';
+    if (o.pt) { const p = E.points(c); if (p) h += '<span class="pt">' + p + '</span>'; }
+    return h + '</' + tag + '>';
+  }
+  function backHTML(size) { return '<div class="card back' + (size ? ' ' + size : '') + '"></div>'; }
+
+  function sortHand(hand, trump) {
+    return hand.slice().sort(function (a, b) {
+      const sa = E.suitOf(a), sb = E.suitOf(b);
+      const ka = sa === trump ? 10 : SUIT_ORDER[sa], kb = sb === trump ? 10 : SUIT_ORDER[sb];
+      return ka - kb || E.strength(a) - E.strength(b);
+    });
+  }
+
+  function btn(act, label, kind, disabled, extra) {
+    return '<button type="button" class="btn ' + kind + '" data-act="' + act + '"' + (disabled ? ' disabled' : '') + (extra || '') + '>' + label + '</button>';
+  }
+  function linkBtn(act, label) { return '<button type="button" class="link" data-act="' + act + '">' + label + '</button>'; }
+
+  function avatarHTML(seat, s, active) {
+    return '<div class="ava" style="--av:' + AVATAR_BG[s % AVATAR_BG.length] + '"><span>' + esc(firstLetter(seat && seat.name)) + '</span>' +
+      (seat && seat.photo ? '<img src="' + esc(seat.photo) + '" alt="" referrerpolicy="no-referrer">' : '') +
+      (active ? '<i class="ring"></i>' : '') + '</div>';
+  }
+
+  function heroHTML(load) {
+    return '<div class="hero' + (load && !reduceMotion ? ' load' : '') + '" aria-hidden="true">' +
+      backHTML('xl') + cardHTML('AS', { size: 'xl' }) + backHTML('xl') + '</div>' +
+      '<h1 class="wordmark">Bura</h1>';
+  }
+
+  // ---------- ekranlar ----------
+  function render() {
+    let html = '';
+    if (S.screen === 'loading') html = '<div class="lobby">' + heroHTML(true) + '<p class="tag">Ulanmoqda…</p></div>';
+    else if (S.screen === 'auth') html = authHTML();
+    else if (S.screen === 'home') html = homeHTML();
+    else if (S.room) html = S.room.phase === 'lobby' ? lobbyHTML(S.room) : tableHTML(S.room);
+    if (S.conn !== 'open' && !DEMO && S.screen !== 'loading') html += '<div class="conn">Aloqa uzildi. Qayta ulanmoqda…</div>';
+    html += sheetHTML();
+    app.innerHTML = html;
+    afterRender();
+  }
+
+  function afterRender() {
+    app.querySelectorAll('[data-key]').forEach(function (el) { S.seenSlots.add(el.getAttribute('data-key')); });
+    const r = S.room, g = r && r.game;
+    if (g && g.hand) g.hand.forEach(function (c) { S.seenHand.add(r.round + ':' + c); });
+    app.querySelectorAll('.ava img').forEach(function (img) { img.addEventListener('error', function () { img.remove(); }); });
+    S.sheetAnim = false;
+    tick();
+  }
+
+  function renderActions() {
+    const a = app.querySelector('.actions');
+    if (a && S.room && S.room.game) a.outerHTML = actionsHTML(S.room);
+  }
+
+  function authHTML() {
+    return '<div class="lobby">' + heroHTML(false) +
+      '<p class="tag">Bu oʻyin Telegram ichida ishlaydi.</p>' +
+      '<p class="note">Guruhdagi «Oʻyinga kirish» tugmasi orqali yoki bot menyusidan oching.</p></div>';
+  }
+
+  function homeHTML() {
+    return '<div class="lobby">' + heroHTML(true) +
+      '<p class="tag">2×2 jamoa. Kim 61 ochko yigʻadi?</p>' +
+      (S.missing ? '<p class="warn">Bu stol yopilgan yoki topilmadi. Yangi stol oching.</p>' : '') +
+      '<div class="lobby-actions">' + btn('create', 'Yangi stol ochish', 'primary') + '</div>' +
+      '<p class="note">Guruhda /bura deb yozsangiz, bot hamma uchun stol ochadi.</p>' +
+      '<nav class="links">' + linkBtn('rules', 'Qoidalar') + '</nav></div>';
+  }
+
+  function seatNote(s) {
+    if (s.bot) return 'Kompyuter';
+    if (!s.online) return 'Oflayn';
+    if (s.host) return 'Stol egasi';
+    return 'Tayyor';
+  }
+
+  function seatRow(r, i) {
+    const s = r.seats[i];
+    if (s) {
+      const canKick = r.isHost && !s.you && (s.bot || !s.online);
+      return '<li class="seat' + (s.online ? '' : ' off') + '">' + avatarHTML(s, i, false) +
+        '<div class="who"><b>' + esc(s.name) + (s.you && s.name !== 'Siz' ? ' (siz)' : '') + '</b><small>' + seatNote(s) + '</small></div>' +
+        (canKick ? '<button type="button" class="mini-btn" data-act="kick" data-seat="' + i + '">Chiqarish</button>' : '') + '</li>';
+    }
+    let b = '';
+    b += '<button type="button" class="mini-btn" data-act="sit" data-seat="' + i + '">Oʻtirish</button>';
+    if (r.isHost) b += '<button type="button" class="mini-btn" data-act="addBot" data-seat="' + i + '">Bot</button>';
+    return '<li class="seat empty"><span class="ava ghost"></span><div class="who"><b>Boʻsh oʻrin</b><small>' +
+      (DEMO ? 'Bot qoʻshing' : 'Doʻstingizni chaqiring') + '</small></div><span class="seat-btns">' + b + '</span></li>';
+  }
+
+  function lobbyHTML(r) {
+    const filled = r.seats.filter(Boolean).length;
+    let h = '<div class="lobby">' + heroHTML(false) + '<p class="tag">2×2 jamoa. Kim 61 ochko yigʻadi?</p>';
+    for (let t = 0; t < 2; t++) {
+      h += '<section class="team' + (r.myTeam === t ? ' mine' : '') + '"><h2>' + (t + 1) + '-jamoa' + (r.myTeam === t ? '<small>siz shu jamoadasiz</small>' : '') + '</h2>' +
+        '<ul class="seats">' + seatRow(r, t) + seatRow(r, t + 2) + '</ul></section>';
+    }
+    const need = 4 - filled;
+    h += '<p class="status">' + (r.autoStart ? 'Hamma joyida — oʻyin boshlanmoqda…'
+      : need > 0 ? 'Yana ' + need + ' kishi kerak. 4 kishi yigʻilsa, oʻyin oʻzi boshlanadi.' : '') + '</p>';
+    h += '<div class="lobby-actions">';
+    if (r.isHost && need > 0) h += btn('fillBots', need === 1 ? 'Boʻsh oʻringa bot qoʻshish' : 'Boʻsh oʻrinlarni botlar bilan toʻldirish', 'primary', S.busy);
+    if (r.mySeat < 0 && need === 0) h += '<p class="note">Stol toʻla. Siz tomosha qilyapsiz.</p>';
+    if (!DEMO) h += btn('share', 'Doʻstlarni chaqirish', 'secondary');
+    h += '</div>';
+    if (r.isHost) {
+      h += '<label class="toggle"><input type="checkbox" data-act="helper"' + (r.settings.helper ? ' checked' : '') + '>' +
+        '<span><b>Ochko yordamchisi</b><small>Jamoangiz olgan ochiq kartalar ochkosini koʻrsatadi</small></span></label>';
+    }
+    if (DEMO) h += '<p class="demo-note">Demo: sherigingiz va raqiblar — kompyuter. Telegramʼda stolga doʻstlaringiz oʻtiradi.</p>';
+    h += '<nav class="links">' + linkBtn('rules', 'Qoidalar') + (r.mySeat >= 0 && !DEMO ? linkBtn('leave', 'Stoldan turish') : '') + '</nav></div>';
+    return h;
+  }
+
+  function scoreChip(r) {
+    const us = r.myTeam >= 0 ? r.myTeam : 0;
+    const label = r.myTeam >= 0 ? ['Biz', 'Ular'] : ['1-j.', '2-j.'];
+    return '<div class="score" aria-label="Hisob: ' + label[0] + ' ' + r.score[us] + ', ' + label[1] + ' ' + r.score[1 - us] + ', ' + r.target + ' ballgacha">' +
+      '<small>' + label[0] + '</small><b>' + r.score[us] + '</b><i>:</i><b>' + r.score[1 - us] + '</b><small>' + label[1] + '</small></div>';
+  }
+
+  function tableHTML(r) {
+    const g = r.game;
+    if (!g) return '';
+    const seatAt = {};
+    for (let s = 0; s < 4; s++) seatAt[posOf(r, s)] = s;
+    const plays = {};
+    if (g.trick) g.trick.plays.forEach(function (p, i) { plays[p.seat] = { p: p, i: i }; });
+
+    let h = '<header class="bar"><button type="button" class="icon" data-act="menu" aria-label="Menyu">' + iconSvg('i-menu') + '</button>' +
+      '<div class="title"><b>Bura</b><span>' + r.round + '-raund</span></div>' + scoreChip(r) + '</header>';
+    h += '<section class="field">' + GUL + '<div class="opps">' + ['l', 't', 'r'].map(function (p) { return oppHTML(r, seatAt[p], p); }).join('') + '</div>';
+    h += '<div class="trick" id="trick">';
+    ['l', 't', 'r'].forEach(function (p) { h += slotHTML(r, p, seatAt[p], plays); });
+    h += '<div class="cell">' + deckHTML(g) + '</div>';
+    h += slotHTML(r, 'b', seatAt.b, plays);
+    h += '<div class="cell">' + (g.trick && g.trick.k > 1 ? '<span class="ktag">' + g.trick.k + ' tadan</span>' : '') + '</div>';
+    h += '</div>';
+    h += '<div class="event' + (S.eventFresh && !reduceMotion ? ' enter' : '') + '">' + eventHTML(r) + '</div></section>';
+    h += dockHTML(r);
+    return h;
+  }
+
+  function oppHTML(r, s, p) {
+    if (s === undefined) return '<div class="opp"></div>';
+    const g = r.game, seat = r.seats[s];
+    const active = r.phase === 'playing' && isActor(g, s);
+    const partner = r.myTeam >= 0 && s % 2 === r.myTeam;
+    return '<div class="opp' + (active ? ' turn' : '') + (seat.online ? '' : ' off') + (partner ? ' partner' : '') + '">' + avatarHTML(seat, s, active) +
+      '<div class="nm">' + (seat.bot || seat.auto ? '<svg class="bi" aria-label="bot"><use href="#i-bot"/></svg>' : '') + '<span>' + esc(seat.name) + '</span></div>' +
+      (partner ? '<div class="mate">sherik</div>' : '') +
+      '<div class="meta"><span class="fan" aria-label="' + g.counts[s] + ' ta karta">' + repeat('<i class="mini"></i>', g.counts[s]) + '</span>' +
+      '<span class="pile" aria-label="Olgan: ' + g.taken[s] + ' ta karta">' + iconSvg('i-pile') + g.taken[s] + '</span></div></div>';
+  }
+
+  function slotHTML(r, p, s, plays) {
+    const g = r.game;
+    let inner = '';
+    if (s !== undefined && plays[s]) {
+      const pl = plays[s].p, i = plays[s].i;
+      const key = r.round + ':' + g.trickNo + ':' + i;
+      const fresh = !S.seenSlots.has(key) && !reduceMotion;
+      const cards = pl.up
+        ? pl.cards.map(function (c) { return cardHTML(c, { size: 'sm' }); }).join('')
+        : pl.cards
+          ? pl.cards.map(function (c) { return cardHTML(c, { size: 'sm', cls: 'ghost' }); }).join('')
+          : repeat(backHTML('sm'), pl.n);
+      inner = '<div class="slot k' + pl.n + (g.trick.best === i ? ' best' : '') + (fresh ? ' enter-' + p : '') + '" data-key="' + key + '" aria-label="' +
+        esc(seatName(r, s)) + (pl.up ? '' : ', yopiq') + '">' + cards + '</div>';
+    }
+    return '<div class="cell">' + inner + '</div>';
+  }
+
+  function deckHTML(g) {
+    const red = g.trump === 'H' || g.trump === 'D';
+    const hid = g.hiddenInStock ? '<div class="card sm back hid" aria-label="Yopiq karta"><span class="q">?</span></div>' : '';
+    if (g.stock > 0) {
+      return '<div class="deck-wrap"><div class="deck" aria-label="Kolodada ' + g.stock + ' ta karta">' + hid +
+        (g.trumpInStock ? cardHTML(g.trumpCard, { size: 'sm', cls: 'trumpcard' }) : '') +
+        (g.stock > 2 ? backHTML('sm') + '<span class="cnt">' + g.stock + '</span>' : '') +
+        '</div><small>koʻzir ' + suitInline(g.trump) + '</small></div>';
+    }
+    const changed = g.trump !== g.firstTrump;
+    return '<div class="deck-wrap"><span class="kz' + (red ? ' red' : '') + '">' + suitSvg(g.trump) + '</span><small>' +
+      (changed ? 'yangi koʻzir' : 'koʻzir') + '</small></div>';
+  }
+
+  function cardText(c) { return RANK[E.rankOf(c)] + suitInline(E.suitOf(c)); }
+
+  function eventLine(r, ev) {
+    const you = ev.seat === r.mySeat;
+    const nm = you ? 'Siz' : esc(seatName(r, ev.seat));
+    function v(third, second) { return nm + ' ' + (you ? second : third); }
+    switch (ev.kind) {
+      case 'deal': return ev.round + '-raund. ' + (you ? 'Siz birinchi yurasiz' : nm + ' birinchi yuradi') + '. Koʻzir: ' + suitInline(r.game && r.game.firstTrump);
+      case 'lead': return ev.k > 1 ? v(ev.k + ' ta karta bilan yurdi', ev.k + ' ta karta bilan yurdingiz') : v('yurdi', 'yurdingiz');
+      case 'bura': return 'Bura! ' + v('navbatsiz yurdi', 'navbatsiz yurdingiz');
+      case 'beat': return v('urdi', 'urdingiz');
+      case 'discard': return v('yopiq berdi', 'yopiq berdingiz');
+      case 'collect': return v(ev.count + ' ta kartani oldi', ev.count + ' ta kartani oldingiz');
+      case 'reveal': return v('yopiq kartani oldi: ', 'yopiq kartani oldingiz: ') + cardText(ev.card) + (ev.from !== ev.to ? '. Koʻzir endi ' + suitInline(ev.to) : '. Koʻzir oʻzgarmadi');
+      case 'win': return esc(teamName(r, ev.team)) + ' yutdi: ' + ev.points[ev.team] + ' ochko';
+      case 'aces': return '4 ta tuz! ' + v('mutlaq yutdi', 'mutlaq yutdingiz');
+      case 'draw': return '60:60 — durang';
+    }
+    return '';
+  }
+
+  function eventHTML(r) {
+    const ev = r.event;
+    if (!ev) return '';
+    let t = eventLine(r, ev);
+    if (ev.auto) t += ' (vaqt tugadi)';
+    (ev.also || []).forEach(function (e) { if (e.kind === 'reveal' || e.kind === 'bura') t += '<span class="also">' + eventLine(r, e) + '</span>'; });
+    return t;
+  }
+
+  function dockHTML(r) {
+    const g = r.game, me = r.mySeat;
+    const myTurn = r.phase === 'playing' && isActor(g, me);
+    let h = '<section class="dock">';
+    if (myTurn && S.deadlineAt) h += '<div class="mytimer"><i></i></div>';
+    if (me >= 0) {
+      let help = g.teamCards ? 'Jamoa olgan: ' + g.teamCards + ' ta karta' : 'Jamoangiz hali karta olmadi';
+      if (g.teamCards && g.teamKnown != null) help = 'Jamoa: <b>' + g.teamKnown + '</b> ochiq ochko' + (g.teamHidden ? ', ' + g.teamHidden + ' ta yopiq' : '');
+      h += '<div class="mebar' + (myTurn ? ' turn' : '') + '"><span><b>Siz</b></span><span class="help">' + help + '</span></div>';
+    }
+    return h + handHTML(r) + actionsHTML(r) + '</section>';
+  }
+
+  function handHTML(r) {
+    const g = r.game;
+    if (!g.hand) return '<div class="hand spect">Siz tomoshabinsiz</div>';
+    const cards = sortHand(g.hand, g.trump);
+    return '<div class="hand n' + cards.length + '" role="group" aria-label="Qoʻlingizdagi kartalar">' + cards.map(function (c, i) {
+      const sel = S.selected.indexOf(c) >= 0;
+      const fresh = !S.seenHand.has(r.round + ':' + c) && !reduceMotion;
+      return cardHTML(c, { tag: 'button', pt: true, cls: (sel ? 'sel' : '') + (fresh ? ' enter' : ''), attrs: ' data-act="card" aria-pressed="' + sel + '" style="--i:' + i + '"' });
+    }).join('') + '</div>';
+  }
+
+  function resultShort(r) {
+    const res = r.result;
+    if (!res) return '';
+    if (res.type === 'draw') return '60:60 — durang';
+    const name = esc(teamName(r, res.team));
+    return (res.type === 'aces' ? '4 ta tuz! ' : '') + name + ' yutdi, +' + res.award + ' ball';
+  }
+
+  function actionsFor(r) {
+    const g = r.game, me = r.mySeat;
+    const o = { hint: '', btns: [] };
+    if (r.phase === 'roundEnd') {
+      o.hint = resultShort(r);
+      o.btns.push({ act: 'result', label: 'Natija', kind: 'secondary' });
+      if (me >= 0 && !r.seats[me].auto) o.btns.push({ act: 'next', label: r.matchOver ? 'Yangi match' : 'Keyingi raund', kind: 'primary' });
+      else if (me < 0 && r.seats.some(function (s) { return s && (s.bot || s.auto); })) o.btns.push({ act: 'sit', label: 'Bot oʻrniga oʻtirish', kind: 'primary' });
+      return o;
+    }
+    if (me < 0) { o.hint = 'Siz tomoshabinsiz. Raund tugagach, bot oʻrniga oʻtirishingiz mumkin.'; return o; }
+    if (r.seats[me].auto) {
+      o.hint = 'Siz stoldan chiqdingiz — oʻrningizda bot oʻynayapti.';
+      o.btns.push({ act: 'return', label: 'Oʻyinga qaytish', kind: 'primary' });
+      return o;
+    }
+    if (g.phase === 'lead' && !g.trick) {
+      if (g.leader === me) {
+        const sel = S.selected, ok = sel.length > 0 && E.isValidLead(sel);
+        o.hint = ok ? (sel.length > 1 ? 'Hamma ' + sel.length + ' tadan karta tashlaydi' : '') : 'Yurish uchun karta tanlang: 1 ta yoki bir xil mastdagi 2–4 ta';
+        o.btns.push({ act: 'lead', label: ok && sel.length > 1 ? sel.length + ' ta bilan yurish' : 'Yurish', kind: 'primary', disabled: !ok });
+        return o;
+      }
+      o.hint = esc(seatName(r, g.leader)) + ' yurmoqda…';
+      return o;
+    }
+    if (g.phase === 'follow' && g.trick) {
+      if (g.turn === me) {
+        const k = g.trick.k, bestPlay = g.trick.plays[g.trick.best], best = bestPlay.cards;
+        const can = E.canBeatWith(g.hand, best, g.trump);
+        const sel = S.selected, full = sel.length === k, beats = full && E.setBeats(sel, best, g.trump);
+        const mateWins = bestPlay.seat % 2 === r.myTeam;
+        if (!can) o.hint = (mateWins ? 'Sherigingiz olmoqda. ' : 'Ura olmaysiz. ') + k + ' ta kartani yopiq bering';
+        else if (!full) o.hint = k + ' ta karta tanlang: urish yoki yopiq berish' + (mateWins ? ' (sherigingiz olmoqda)' : '');
+        else if (!beats) o.hint = 'Bu kartalar ura olmaydi';
+        o.btns.push({ act: 'discard', label: 'Yopiq berish', kind: 'secondary', disabled: !full });
+        o.btns.push({ act: 'beat', label: 'Urish', kind: 'primary', disabled: !beats });
+        return o;
+      }
+      o.hint = esc(seatName(r, g.turn)) + ' javob bermoqda…';
+      return o;
+    }
+    if (g.phase === 'trickEnd' && g.trick) o.hint = g.trick.winner === me ? 'Kartalar sizniki!' : esc(seatName(r, g.trick.winner)) + ' oladi';
+    return o;
+  }
+
+  function actionsHTML(r) {
+    const a = actionsFor(r);
+    return '<div class="actions"><p class="hint">' + a.hint + '</p>' + (a.btns.length ? '<div class="btns">' +
+      a.btns.map(function (b) { return btn(b.act, b.label, b.kind, b.disabled || S.busy); }).join('') + '</div>' : '') + '</div>';
+  }
+
+  // ---------- pastdan chiquvchi oynalar ----------
+  function openSheet(type) { S.sheet = { type: type }; S.sheetAnim = true; render(); }
+
+  function sheetHTML() {
+    if (!S.sheet) return '';
+    let body = '';
+    const r = S.room;
+    switch (S.sheet.type) {
+      case 'rules': body = rulesHTML(); break;
+      case 'menu': body = r ? menuHTML(r) : ''; break;
+      case 'leave': body = '<h2>Stoldan chiqasizmi?</h2><p>Oʻrningizda bot oʻynaydi. Qaytib kirsangiz, oʻyinni davom ettirasiz.</p>' +
+        '<div class="btns">' + btn('close', 'Qolish', 'secondary') + btn('leave-yes', 'Chiqish', 'danger') + '</div>'; break;
+      case 'result': body = r && r.result ? resultHTML(r) : ''; break;
+    }
+    if (!body) return '';
+    return '<div class="sheet-wrap' + (S.sheetAnim && !reduceMotion ? ' anim' : '') + '" data-act="backdrop"><div class="sheet" role="dialog" aria-modal="true">' +
+      '<button type="button" class="x" data-act="close" aria-label="Yopish">×</button>' + body + '</div></div>';
+  }
+
+  function teamsHTML(r, res) {
+    let h = '<div class="teams">';
+    const order = r.myTeam === 1 ? [1, 0] : [0, 1];
+    order.forEach(function (t) {
+      const win = res && res.team === t && res.type !== 'draw';
+      h += '<div class="tcol' + (win ? ' win' : '') + '"><div class="tname">' + esc(teamName(r, t)) + '</div>' +
+        (res ? '<div class="tpts">' + res.points[t] + '<small> ochko</small></div>' : '') +
+        '<div class="tscore">' + r.score[t] + ' <small>ball</small></div><ul>';
+      for (let i = t; i < 4; i += 2) {
+        const s = r.seats[i];
+        h += '<li>' + (s ? esc(s.name) + (s.you && s.name !== 'Siz' ? ' <small>siz</small>' : '') : '—') + (res ? '<span>' + res.totals[i] + '</span>' : '') + '</li>';
+      }
+      h += '</ul></div>';
+    });
+    return h + '</div>';
+  }
+
+  function menuHTML(r) {
+    let h = '<h2>Hisob</h2><p class="sub">' + (r.round ? r.round + '-raund. ' + r.target + ' ballga yetgan jamoa matchni yutadi.' : 'Oʻyin hali boshlanmadi') + '</p>' + teamsHTML(r, null);
+    if (r.matchWins[0] || r.matchWins[1]) h += '<p class="sub">Yutilgan matchlar: ' + r.matchWins[r.myTeam === 1 ? 1 : 0] + ' : ' + r.matchWins[r.myTeam === 1 ? 0 : 1] + '</p>';
+    h += '<div class="lobby-actions">' + btn('rules', 'Qoidalar', 'secondary');
+    if (!DEMO) h += btn('share', 'Doʻstlarni chaqirish', 'secondary');
+    if (r.mySeat >= 0 && !r.seats[r.mySeat].auto && r.phase !== 'lobby') h += btn('leave', 'Stoldan chiqish', 'danger');
+    if (r.isHost && r.phase === 'roundEnd') h += btn('lobby', 'Lobbiga qaytish (yangi match)', 'secondary');
+    h += btn('close', 'Yopish', 'primary') + '</div>';
+    return h;
+  }
+
+  function awardReason(res) {
+    if (res.type === 'aces') return 'mutlaq gʻalaba';
+    if (res.award === 6) return 'raqiblar birorta ham karta olmadi';
+    if (res.award === 4) return 'raqiblar 31 ochkoga yetmadi';
+    return 'raqiblar 31+ ochko oldi';
+  }
+
+  function resultHTML(r) {
+    const res = r.result, mine = r.myTeam >= 0;
+    let title, sub = '', cards = '', big = false;
+    if (res.type === 'draw') {
+      title = 'Durang';
+      sub = '60:60 — hech kimga ball berilmaydi.';
+    } else {
+      const ours = mine && res.team === r.myTeam;
+      if (res.type === 'aces') {
+        big = true;
+        title = '4 ta tuz!';
+        cards = '<div class="reveal">' + res.cards.map(function (c) { return cardHTML(c, { size: 'xs' }); }).join('') + '</div>';
+        sub = esc(seatName(r, res.seat)) + ' — ' + esc(teamName(r, res.team)).toLowerCase() + ' mutlaq yutdi. +' + res.award + ' ball.';
+      } else {
+        title = !mine ? (res.team + 1) + '-jamoa yutdi' : ours ? 'Siz yutdingiz!' : 'Raqiblar yutdi';
+        sub = '+' + res.award + ' ball — ' + awardReason(res) + '.';
+      }
+    }
+    let h = '<h2' + (big ? ' class="big"' : '') + '>' + title + '</h2><p class="sub">' + sub + '</p>' + cards + teamsHTML(r, res);
+    if (res.matchOver) {
+      const w = res.matchWinner;
+      h += '<p class="match">' + (mine ? (w === r.myTeam ? 'Match sizniki! ' : 'Matchni raqiblar yutdi. ') : (w + 1) + '-jamoa matchni yutdi. ') +
+        'Keyingi raund yangi match boʻlib boshlanadi.</p>';
+    }
+    h += '<div class="btns">';
+    const me = r.mySeat;
+    if (r.isHost) h += btn('lobby', 'Lobbiga', 'secondary');
+    if (me >= 0 && !r.seats[me].auto) h += btn('next', res.matchOver ? 'Yangi match' : 'Keyingi raund', 'primary');
+    else if (me < 0 && r.seats.some(function (s) { return s && (s.bot || s.auto); })) h += btn('sit', 'Bot oʻrniga oʻtirish', 'primary');
+    else h += btn('close', 'Yopish', 'secondary');
+    return h + '</div>';
+  }
+
+  function rulesHTML() {
+    const pts = ['AH', '10H', 'KH', 'QH', 'JH', '9H'];
+    return '<h2>Bura qoidalari</h2><p class="sub">2×2 jamoa. Sherigingiz roʻparangizda oʻtiradi, ochkolar jamoaga qoʻshiladi.</p>' +
+      '<h3>Kartalar va ochkolar</h3><div class="pointrow">' + pts.map(function (c) { return '<div>' + cardHTML(c, { size: 'xs' }) + E.points(c) + '</div>'; }).join('') + '</div>' +
+      '<p>36 ta karta, jami 120 ochko. Kuch tartibi: T (tuz) › 10 › K › D › V › 9 › 8 › 7 › 6. 10 korolni bosadi, korol 10 ni bosa olmaydi.</p>' +
+      '<h3>Tarqatish va koʻzir</h3><ul class="rules">' +
+      '<li>Har kimga 4 tadan karta. Bitta karta koʻzir qilib ochiladi, yana bittasi yopiq turadi.</li>' +
+      '<li>Kolodadan avval oddiy kartalar, keyin ochiq koʻzir, eng oxirida yopiq karta olinadi. Yopiq kartani olgan oʻyinchi uni hammaga koʻrsatadi va koʻzir masti shu kartanikiga almashadi.</li>' +
+      '<li>Birinchi yurish har raundda navbat bilan keyingi oʻyinchiga oʻtadi.</li></ul>' +
+      '<h3>Yurish va urish</h3><ul class="rules">' +
+      '<li>Yurish: 1 ta karta yoki bir xil mastdagi 2–4 ta karta. Qolganlar ham shuncha karta tashlaydi.</li>' +
+      '<li>Stoldagi eng kuchli toʻplamning har bir kartasini urgan oʻyinchi oldinga chiqadi: oʻsha mastning kattaroq kartasi yoki koʻzir bilan.</li>' +
+      '<li>Oddiy 10 ni faqat koʻzir bosadi. Koʻzirni faqat kattaroq koʻzir bosadi: koʻzir korol koʻzir 10 ni bosa olmaydi.</li>' +
+      '<li>Ura olmasangiz yoki xohlamasangiz, kartalar yopiq beriladi. Sherigingiz olayotgan boʻlsa, unga ochkoli karta bering.</li>' +
+      '<li>Eng kuchli toʻplam egasi hamma kartalarni oladi, birinchi boʻlib kolodadan oladi va yuradi.</li></ul>' +
+      '<h3>Kombinatsiyalar</h3><ul class="rules">' +
+      '<li><b>Bura</b> — qoʻldagi 4 kartaning hammasi koʻzir: navbatsiz yuradi.</li>' +
+      '<li><b>4 ta tuz</b> — mutlaq gʻalaba.</li></ul>' +
+      '<h3>Hisob</h3><ul class="rules">' +
+      '<li>Kartalar tugagach jamoa ochkolari sanaladi: 61 va undan koʻp — gʻalaba, 60:60 — durang.</li>' +
+      '<li>Gʻolib jamoa ball oladi: raqib 31+ ochko olgan boʻlsa — 2, 31 dan kam — 4, birorta ham karta olmagan boʻlsa yoki 4 ta tuz — 6.</li>' +
+      '<li>12 ballga birinchi yetgan jamoa matchni yutadi.</li>' +
+      '<li>Har yurishga vaqt beriladi — tugasa, avtomatik yuriladi.</li></ul>' +
+      '<div class="btns">' + btn('close', 'Tushunarli', 'primary') + '</div>';
+  }
+
+  // ---------- harakatlar ----------
+  function tapCard(c) {
+    const r = S.room, g = r && r.game;
+    if (!g || !g.hand || r.phase !== 'playing') return;
+    const i = S.selected.indexOf(c);
+    if (i >= 0) S.selected.splice(i, 1);
+    else if (g.phase === 'follow' && g.trick) {
+      S.selected.push(c);
+      while (S.selected.length > g.trick.k) S.selected.shift();
+    } else if (S.selected.length && E.suitOf(S.selected[0]) !== E.suitOf(c)) {
+      S.selected = [c];
+    } else {
+      S.selected.push(c);
+      while (S.selected.length > 4) S.selected.shift();
+    }
+    haptic('select');
+    app.querySelectorAll('.hand .card').forEach(function (b) {
+      const on = S.selected.indexOf(b.getAttribute('data-c')) >= 0;
+      b.classList.toggle('sel', on);
+      b.classList.remove('enter');
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+    renderActions();
+  }
+
+  function play(type) {
+    if (!S.selected.length) return;
+    send({ t: 'act', action: { type: type, cards: S.selected.slice() } }, true);
+    haptic(type === 'beat' ? 'heavy' : 'light');
+  }
+
+  function share() {
+    const link = S.invite;
+    if (!link) { toast('Havola hali tayyor emas'); return; }
+    const url = 'https://t.me/share/url?url=' + encodeURIComponent(link) + '&text=' + encodeURIComponent('Bura oʻynaymizmi? 🃏 Stolga qoʻshiling!');
+    try { if (TG && TG.isVersionAtLeast('6.1')) { TG.openTelegramLink(url); return; } } catch (e) { /* */ }
+    if (navigator.share) { navigator.share({ title: 'Bura', url: link }).catch(function () {}); return; }
+    window.open(url, '_blank');
+  }
+
+  function handle(act, el) {
+    const r = S.room;
+    switch (act) {
+      case 'card': return tapCard(el.getAttribute('data-c'));
+      case 'lead': case 'beat': case 'discard': return play(act);
+      case 'menu': return openSheet('menu');
+      case 'rules': return openSheet('rules');
+      case 'result': return openSheet('result');
+      case 'close':
+        if (S.sheet && S.sheet.type === 'result' && r) S.resultClosedFor = r.round;
+        S.sheet = null;
+        return render();
+      case 'leave':
+        if (r && r.phase !== 'lobby' && r.mySeat >= 0) return openSheet('leave');
+        S.sheet = null;
+        return send({ t: 'leave' });
+      case 'leave-yes': S.sheet = null; render(); return send({ t: 'leave' });
+      case 'share': return share();
+      case 'start': return send({ t: 'start' }, true);
+      case 'addBot': return send({ t: 'addBot', seat: el && el.hasAttribute('data-seat') ? Number(el.getAttribute('data-seat')) : undefined });
+      case 'fillBots': return send({ t: 'fillBots' }, true);
+      case 'kick': return send({ t: 'kick', seat: Number(el.getAttribute('data-seat')) });
+      case 'sit': case 'return': S.sheet = null; return send({ t: 'sit', seat: el && el.hasAttribute('data-seat') ? Number(el.getAttribute('data-seat')) : undefined });
+      case 'next': S.sheet = null; return send({ t: 'next' }, true);
+      case 'lobby': S.sheet = null; return send({ t: 'lobby' }, true);
+      case 'create': return send({ t: 'create' }, true);
+    }
+  }
+
+  app.addEventListener('click', function (e) {
+    const t = e.target.closest('[data-act]');
+    if (!t || t.disabled) return;
+    const act = t.getAttribute('data-act');
+    if (act === 'backdrop') {
+      if (e.target !== t) return; // oynaning ichi bosilgan
+      return handle('close', t);
+    }
+    if (act === 'helper') return; // change hodisasida
+    handle(act, t);
+  });
+  app.addEventListener('change', function (e) {
+    const t = e.target;
+    if (t.matches && t.matches('input[data-act="helper"]')) send({ t: 'setting', key: 'helper', value: t.checked });
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && S.sheet) handle('close', null);
+  });
+
+  function toast(msg) {
+    toastEl.textContent = msg;
+    toastEl.classList.add('show');
+    clearTimeout(S.toastT);
+    S.toastT = setTimeout(function () { toastEl.classList.remove('show'); }, 2600);
+  }
+
+  // Navbat taymeri
+  function tick() {
+    const r = S.room;
+    if (!r || r.phase !== 'playing') return;
+    const left = S.deadlineAt ? Math.max(0, S.deadlineAt - Date.now()) : 0;
+    const p = S.deadlineAt && S.deadlineTotal ? left / S.deadlineTotal : 1;
+    app.querySelectorAll('.ring, .mytimer i').forEach(function (el) { el.style.setProperty('--p', p.toFixed(3)); });
+    const mt = app.querySelector('.mytimer');
+    if (mt) mt.classList.toggle('urgent', S.deadlineAt > 0 && left < 6000);
+  }
+  setInterval(tick, 250);
+
+  // Sinov uchun (faqat ?dev=1 yoki demo rejimida)
+  if (qs.get('dev') || DEMO) window.__bura = { S: S, send: send };
+
+  // ---------- ishga tushirish ----------
+  initTelegram();
+  render();
+  if (DEMO) connectLocal(); else connectWS();
+})();
