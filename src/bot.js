@@ -39,7 +39,9 @@ const HELP = [
   '/qoidalar — oʻyin qoidalari',
   '',
   'Guruhda /bura yozing, soʻng 4 kishi «🎮 Oʻyinga kirish» tugmasini bosadi — oʻyin oʻzi boshlanadi. 2×2 jamoa boʻlib oʻynaladi: 1 va 3-oʻrin, 2 va 4-oʻrin.',
-  'Odam kam boʻlsa, stol egasi boʻsh oʻrinlarga bot qoʻshadi.'
+  'Odam kam boʻlsa, stol egasi boʻsh oʻrinlarga bot qoʻshadi.',
+  '',
+  '🎙 Stolda ovozli chat bor: oʻyin ichidagi mikrofon tugmasini bosing — stoldagilar bilan gaplashasiz.'
 ].join('\n');
 
 function createBot(opts) {

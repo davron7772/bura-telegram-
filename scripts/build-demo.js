@@ -19,6 +19,7 @@ let html = read('public/index.html')
   .replace(/<link rel="stylesheet"[^>]*>/, () => '<style>\n' + css + '\n</style>')
   .replace(/<script src="\/engine\.js[^"]*"><\/script>/, () => '<script>\n' + read('src/engine.js') + '\n</script>')
   .replace(/<script src="\/room\.js[^"]*"><\/script>/, () => '<script>\n' + read('src/room.js') + '\n</script>')
+  .replace(/<script src="\/voice\.js[^"]*"><\/script>\n?/, '') // demoda server yoʻq — ovozli chat ham yoʻq
   .replace(/<script src="\/app\.js[^"]*"><\/script>/, () => '<script>window.BURA_DEMO = true;</script>\n<script>\n' + read('public/app.js') + '\n</script>')
   .replace('<title>Bura</title>', '<title>Bura — demo</title>')
   .replace(/^<!doctype html>/i, '<!DOCTYPE html>')

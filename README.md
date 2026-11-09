@@ -8,6 +8,7 @@ Guruhda `/bura` deb yoziladi. Bot oʻyin stolini ochib, «🎮 Oʻyinga kirish»
 
 - **Telegram bot** — `/bura` buyrugʻi bilan stol ochadi. Guruhdagi xabar oʻyin davomida yangilanib turadi: jamoalar, raund, hisob.
 - **Mini App** — telefonga moslashtirilgan oʻyin stoli (Telegram ichida ochiladi).
+- **Ovozli chat** — stoldagilar Mini App ichida bir-biri bilan gaplashadi; kim gapirayotgani avatarida koʻrinib turadi.
 - **Server** — 4 kishini real vaqtda bogʻlaydi va qoidalarni tekshiradi. Kartalar serverda saqlanadi, shuning uchun hech kim boshqaning kartasini koʻra olmaydi.
 - **Kompyuter oʻyinchilari** — odam yetmasa, stol egasi boʻsh oʻrinlarga bot qoʻshadi. Kimdir chiqib ketsa yoki vaqtida yurmasa, uning oʻrniga avtomatik yuriladi.
 - **Hisob** — gʻolib jamoa raundda 2, 4 yoki 6 ball oladi; 12 ballga birinchi yetgan jamoa matchni yutadi.
@@ -61,6 +62,27 @@ HTTPS uchun oldiga Caddy yoki Nginx qoʻying (domen kerak).
 
 Bot bilan shaxsiy chatda ham `/bura` yozish mumkin — bot havolani doʻstlaringizga yuborish tugmasini beradi.
 
+## Ovozli chat
+
+- Lobbida «Ovozli chat» qatoridagi, oʻyin paytida esa yuqoridagi mikrofon tugmasini bosing. Telegram mikrofonga ruxsat soʻraydi.
+- Tugmani yana bossangiz, mikrofon oʻchadi yoki yoqiladi. Kimlar ulangani va «Chiqish» tugmasi — ☰ menyusida.
+- Gapirayotgan kishining avatarida yashil halqa chiqadi. Kichik mikrofon belgisi u ovozli chatda ekanini bildiradi.
+- Mikrofonga ruxsat berilmasa ham, oʻyinchi boshqalarni eshitadi (faqat tinglaydi). Keyinroq tugmani bosib, mikrofonni yoqishi mumkin.
+- Menyuda istalgan kishining ovozini faqat oʻzingiz uchun oʻchirib qoʻyish mumkin.
+- Bir stolda bir vaqtda 6 kishigacha (4 oʻyinchi va 2 tomoshabin).
+
+Ovoz telefonlar oʻrtasida toʻgʻridan-toʻgʻri (WebRTC) uzatiladi. Server faqat ulanishga yordam beradi: ovoz serverdan oʻtmaydi va yozib olinmaydi.
+
+**TURN server (tavsiya etiladi).** Baʼzi mobil tarmoqlarda telefonlar bir-biriga toʻgʻridan-toʻgʻri ulana olmaydi — bunday paytda ovoz TURN server orqali oʻtadi. TURN boʻlmasa ham ovozli chat ishlaydi, faqat ayrim oʻyinchilar ulana olmasligi mumkin (menyuda «ulanib boʻlmadi» deb chiqadi). Bepul variant — Metered Open Relay (yozilish paytida bepul tarifi oyiga 20 GB edi; bir kishining ovozi soatiga taxminan 25 MB):
+
+1. metered.ca saytida roʻyxatdan oʻting va TURN server login-parolini oling.
+2. Render → xizmatingiz → **Environment** boʻlimiga `TURN_URLS`, `TURN_USERNAME`, `TURN_CREDENTIAL` qoʻshing (namuna `.env.example` faylida). Yoki Metered koʻrsatgan `iceServers` roʻyxatini butunligicha `ICE_SERVERS` ga qoʻying.
+3. Saqlang — server qayta ishga tushadi.
+
+**Maxfiylik.** Toʻgʻridan-toʻgʻri ulanishda qatnashchilar bir-birining IP manzilini koʻra oladi (WebRTC shunday ishlaydi). Buni yashirish uchun TURN sozlab, `VOICE_RELAY_ONLY=1` qiling — ovoz faqat TURN orqali oʻtadi.
+
+**Qurilmalar.** iPhone'da iOS 14.3 yoki yangiroq kerak. Hammangiz bir xonada boʻlsangiz, quloqchin taqing yoki ovozli chatni yoqmang — aks holda ovoz qaytib, shovqin chiqadi.
+
 ## Qoidalar (qisqacha)
 
 - 4 oʻyinchi, 2×2 jamoa. Sherigingiz roʻparangizda oʻtiradi, ochkolar jamoaga qoʻshiladi.
@@ -90,12 +112,16 @@ Qoidalar `src/engine.js` faylida jamlangan; boshqa mahalliy variant kerak boʻls
 | `BOT_MODE` | `webhook` yoki `polling`. Boʻsh boʻlsa: `PUBLIC_URL` https boʻlsa — webhook |
 | `PORT` | Server porti (standart 3000) |
 | `DEV_MODE` | `1` — Telegramsiz brauzerda sinash: `http://localhost:3000/?dev=1&uid=1&name=Ali`. Ochiq serverda yoqmang! |
+| `TURN_URLS`, `TURN_USERNAME`, `TURN_CREDENTIAL` | Ovozli chat uchun TURN server (ixtiyoriy, tavsiya etiladi) |
+| `ICE_SERVERS` | STUN/TURN roʻyxati JSON koʻrinishida. Berilsa, `STUN_URLS` va `TURN_*` oʻrniga ishlatiladi |
+| `STUN_URLS` | STUN serverlar (standart: Google va Cloudflare) |
+| `VOICE_RELAY_ONLY` | `1` — ovoz faqat TURN orqali oʻtadi, IP manzillar yashirin qoladi (TURN shart) |
 
 ## Bilish kerak
 
 - Stollar server xotirasida saqlanadi. Server qayta ishga tushsa, ochiq oʻyinlar va match hisobi yangidan boshlanadi.
 - Render bepul tarifida server 15 daqiqa ishlatilmasa «uxlaydi». Shundan keyingi birinchi `/bura` ga javob 30–60 soniya kechikishi mumkin.
-- Avtomatik testlar: `npm test` (qoidalar, yopiq koʻzir, jamoa hisobi, stol, initData tekshiruvi, 4 kishilik toʻliq oʻyin).
+- Avtomatik testlar: `npm test` (qoidalar, yopiq koʻzir, jamoa hisobi, stol, initData tekshiruvi, ovozli chat signallari, 4 kishilik toʻliq oʻyin).
 - Demo: `npm run build:demo` → `dist/bura-demo.html`. Kompyuter oʻyinchilariga qarshi, internetsiz ishlaydi.
 
 ## Fayllar
@@ -104,10 +130,11 @@ Qoidalar `src/engine.js` faylida jamlangan; boshqa mahalliy variant kerak boʻls
 server.js          HTTP server, WebSocket, botni ishga tushirish
 src/engine.js      Qoidalar va kompyuter oʻyinchisi (server va brauzer uchun umumiy)
 src/room.js        Stol: 4 oʻrin (2×2), navbat, taymer, match hisobi
-src/hub.js         WebSocket ulanishlari
+src/hub.js         WebSocket ulanishlari va ovozli chat signallari
+src/ice.js         Ovozli chat uchun STUN/TURN sozlamalari
 src/bot.js         Telegram buyruqlari va guruhdagi stol xabari
 src/auth.js        Telegram initData tekshiruvi
-public/            Mini App: index.html, style.css, app.js, shriftlar
+public/            Mini App: index.html, style.css, app.js, voice.js (ovozli chat), shriftlar
 assets/            BotFather uchun rasm
 test/              Avtomatik testlar
 ```

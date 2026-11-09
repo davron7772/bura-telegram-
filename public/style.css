@@ -27,6 +27,8 @@
   --text: #f7ecdf;
   --muted: #cdb2a6;
   --muted-indigo: #a3a6c8;
+  --talk: #6fe3a5;      /* ovozli chat: gapirayotgan kishi */
+  --talk-ink: #0d2b1c;
 
   --serif: 'Alegreya', Georgia, 'Noto Serif', 'Times New Roman', serif;
   --sans: 'Alegreya Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
@@ -130,7 +132,7 @@ svg { display: block; }
 }
 .icon { width: 40px; height: 40px; display: grid; place-items: center; border: 0; background: transparent; border-radius: 10px; cursor: pointer; }
 .icon svg { width: 22px; height: 22px; }
-.bar .title { flex: 1; display: flex; align-items: baseline; gap: 10px; }
+.bar .title { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 10px; overflow: hidden; white-space: nowrap; }
 .bar .title b { font: 800 21px/1 var(--serif); letter-spacing: .01em; }
 .bar .title span { font-size: 14px; color: var(--muted-indigo); }
 .score { display: flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 99px; background: var(--indigo-hi); }
@@ -159,6 +161,7 @@ svg { display: block; }
 .opp .nm span { overflow: hidden; text-overflow: ellipsis; }
 .opp.turn .nm { color: var(--saffron); }
 .opp.partner .ava { box-shadow: 0 0 0 2px var(--porcelain); }
+.opp .ava { margin-bottom: 4px; } /* ovoz halqasi va belgisi ism ustiga chiqmasin */
 .opp .mate { font-size: 12px; line-height: 1; color: var(--muted); margin-top: -2px; }
 .opp .meta { display: flex; align-items: center; gap: 8px; font: 500 13px var(--sans); color: var(--muted); min-height: 18px; }
 .fan { display: flex; }
@@ -183,6 +186,89 @@ svg { display: block; }
   mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
 }
 .ava.ghost { background: transparent; box-shadow: inset 0 0 0 1.5px rgba(247, 236, 223, .3); }
+
+/* ---------- ovozli chat ---------- */
+.mic {
+  position: relative; flex: none;
+  width: 40px; height: 40px; border: 0; border-radius: 50%;
+  display: grid; place-items: center;
+  background: transparent; color: var(--text); cursor: pointer;
+  box-shadow: inset 0 0 0 1.5px rgba(247, 236, 223, .35);
+  transition: background .15s, color .15s;
+}
+.mic svg { width: 21px; height: 21px; }
+.mic svg, .mic .vn { pointer-events: none; }
+.mic .vn {
+  position: absolute; right: -4px; top: -3px;
+  min-width: 18px; height: 18px; padding: 0 4px; border-radius: 99px;
+  background: var(--talk); color: var(--talk-ink);
+  font: 700 12px/18px var(--sans); text-align: center;
+  box-shadow: 0 0 0 2px var(--indigo);
+}
+.mic.s-join { animation: vjoin .8s ease-in-out infinite alternate; }
+.mic.s-on { background: var(--talk); color: var(--talk-ink); box-shadow: none; }
+.mic.s-mute { background: rgba(255, 138, 128, .14); color: #ffb4a6; box-shadow: inset 0 0 0 1.5px rgba(255, 180, 166, .55); }
+.mic.s-listen { background: rgba(111, 227, 165, .12); color: var(--talk); box-shadow: inset 0 0 0 1.5px rgba(111, 227, 165, .55); }
+.mic.talk::after {
+  content: ''; position: absolute; inset: -3px; border-radius: 50%;
+  box-shadow: 0 0 0 2px var(--talk);
+  animation: vtalk .7s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+.mic.big.talk::after { inset: -5px; }
+.mic:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+.mic.big { width: 52px; height: 52px; }
+.mic.big svg { width: 26px; height: 26px; }
+.mic.big .vn { box-shadow: 0 0 0 2px var(--madder); }
+@keyframes vjoin { from { opacity: .45; } }
+@keyframes vtalk { from { transform: scale(.9); opacity: .55; } }
+
+/* avatardagi belgi: kim ovozli chatda, kim gapiryapti */
+.ava .vb {
+  position: absolute; right: -5px; bottom: -4px; z-index: 2;
+  width: 19px; height: 19px; border-radius: 50%;
+  display: none; place-items: center;
+  background: var(--indigo); color: var(--talk);
+  box-shadow: 0 0 0 2px var(--indigo-lo);
+}
+.ava .vb svg { width: 12px; height: 12px; }
+.ava .vb .off { display: none; }
+.ava.v-in .vb { display: grid; }
+.ava.v-mute .vb { color: #ffb4a6; }
+.ava.v-mute .vb .on { display: none; }
+.ava.v-mute .vb .off { display: block; }
+.ava::after {
+  content: ''; position: absolute; inset: -7px; border-radius: 50%;
+  box-shadow: 0 0 0 2.5px var(--talk), 0 0 14px rgba(111, 227, 165, .5);
+  opacity: 0; transform: scale(.88);
+  transition: opacity .12s ease-out, transform .12s ease-out;
+  pointer-events: none;
+}
+.ava.v-talk::after { opacity: 1; transform: none; }
+
+.voice-row {
+  width: 100%; display: flex; align-items: center; gap: 12px;
+  margin-top: 14px; padding: 10px 12px; border-radius: 14px;
+  background: rgba(20, 22, 44, .38);
+}
+.voice-row .vtxt { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; }
+.voice-row .vtxt > span { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.voice-row b { font-size: 16px; }
+.voice-row small { font-size: 14px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.vlist { list-style: none; margin: 4px 0 0; padding: 0; }
+.vrow { display: flex; align-items: center; gap: 12px; padding: 8px 2px; border-bottom: 1px solid rgba(163, 166, 200, .16); }
+.vrow:last-child { border-bottom: 0; }
+.vrow .vdot { width: 10px; height: 10px; flex: none; border-radius: 50%; background: rgba(163, 166, 200, .35); transition: background .12s, box-shadow .12s; }
+.vrow.talk .vdot { background: var(--talk); box-shadow: 0 0 0 4px rgba(111, 227, 165, .22); }
+.vrow .vname { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.vrow .vname b { font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vrow .vname small { font-size: 14px; color: var(--muted-indigo); }
+.vbtn { width: 40px; height: 40px; flex: none; border: 0; border-radius: 50%; display: grid; place-items: center; background: rgba(247, 236, 223, .08); color: var(--text); cursor: pointer; }
+.vbtn svg { width: 20px; height: 20px; pointer-events: none; }
+.vbtn.off { background: rgba(255, 138, 128, .14); color: #ffb4a6; }
+.vbtn:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.sheet p.vnote { margin-top: 12px; font-size: 14px; color: var(--muted-indigo); }
 
 /* stol markazi */
 .trick {
@@ -447,6 +533,10 @@ svg { display: block; }
 @media (min-height: 760px) {
   :root { --tw: clamp(40px, 12vw, 54px); }
   .opps { padding-top: 16px; }
+}
+@media (max-width: 370px) {
+  .bar { gap: 8px; }
+  .bar .title span { display: none; }
 }
 @media (max-height: 600px) {
   :root { --cw: clamp(58px, 18vw, 74px); --tw: clamp(32px, 9.5vw, 40px); }

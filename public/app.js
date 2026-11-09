@@ -48,7 +48,13 @@
     closingConfirm: false,
     toastT: null
   };
-  let T = null; // transport: { send(obj) }
+  let T = null; // transport: { send(obj), raw(obj) }
+
+  // Ovozli chat (demoda yoʻq: server kerak)
+  const VC = !DEMO && window.BuraVoice && window.BuraVoice.supported()
+    ? window.BuraVoice.create({ send: function (o) { if (T && T.raw) T.raw(o); }, onChange: onVoice, toast: toast, haptic: haptic })
+    : null;
+  const VBADGE = '<i class="vb" aria-hidden="true"><svg class="on"><use href="#i-mic"/></svg><svg class="off"><use href="#i-mic-off"/></svg></i>';
 
   // ---------- Telegram ----------
   function initTelegram() {
@@ -98,6 +104,7 @@
         retry = 0;
         setConn('open');
         ws.send(JSON.stringify(helloMsg()));
+        if (VC) VC.onOpen(); // ovozli chatga qayta qoʻshilish (hello dan keyin)
         clearInterval(pingT);
         pingT = setInterval(function () { if (ws.readyState === 1) ws.send('{"t":"ping"}'); }, 20000);
       };
@@ -108,6 +115,7 @@
       };
       ws.onclose = function () {
         clearInterval(pingT);
+        if (VC) VC.onClose();
         setConn('closed');
         reconnectT = setTimeout(open, Math.min(8000, 500 * Math.pow(1.7, retry++)));
       };
@@ -120,7 +128,9 @@
       send: function (o) {
         if (ws && ws.readyState === 1) ws.send(JSON.stringify(o));
         else { toast('Aloqa yoʻq. Qayta ulanmoqda…'); S.busy = false; }
-      }
+      },
+      raw: function (o) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); },
+      drop: function () { if (ws) ws.close(); } // faqat sinov uchun
     };
   }
 
@@ -162,8 +172,15 @@
 
   // ---------- serverdan kelgan xabarlar ----------
   function onMessage(m) {
-    if (m.t === 'state') setRoom(m.room, m.invite);
-    else if (m.t === 'home') { S.screen = 'home'; S.room = null; S.missing = !!m.missing; render(); }
+    if (VC && VC.onMessage(m)) return;
+    if (m.t === 'state') {
+      if (VC) {
+        if (S.room && m.room && S.room.id !== m.room.id) VC.reset(); // boshqa stolga oʻtildi
+        if (m.voice) VC.setRoster(m.voice);
+      }
+      setRoom(m.room, m.invite);
+    }
+    else if (m.t === 'home') { if (VC) VC.reset(); S.screen = 'home'; S.room = null; S.missing = !!m.missing; render(); }
     else if (m.t === 'auth_error') { S.screen = 'auth'; render(); }
     else if (m.t === 'error') { S.busy = false; toast(m.msg); haptic('error'); renderActions(); }
   }
@@ -288,9 +305,10 @@
   function linkBtn(act, label) { return '<button type="button" class="link" data-act="' + act + '">' + label + '</button>'; }
 
   function avatarHTML(seat, s, active) {
-    return '<div class="ava" style="--av:' + AVATAR_BG[s % AVATAR_BG.length] + '"><span>' + esc(firstLetter(seat && seat.name)) + '</span>' +
+    const voice = VC && seat && !seat.bot;
+    return '<div class="ava" style="--av:' + AVATAR_BG[s % AVATAR_BG.length] + '"' + (voice ? ' data-vs="' + s + '"' : '') + '><span>' + esc(firstLetter(seat && seat.name)) + '</span>' +
       (seat && seat.photo ? '<img src="' + esc(seat.photo) + '" alt="" referrerpolicy="no-referrer">' : '') +
-      (active ? '<i class="ring"></i>' : '') + '</div>';
+      (active ? '<i class="ring"></i>' : '') + (voice ? VBADGE : '') + '</div>';
   }
 
   function heroHTML(load) {
@@ -318,6 +336,7 @@
     if (g && g.hand) g.hand.forEach(function (c) { S.seenHand.add(r.round + ':' + c); });
     app.querySelectorAll('.ava img').forEach(function (img) { img.addEventListener('error', function () { img.remove(); }); });
     S.sheetAnim = false;
+    paintVoice();
     tick();
   }
 
@@ -373,6 +392,7 @@
     const need = 4 - filled;
     h += '<p class="status">' + (r.autoStart ? 'Hamma joyida — oʻyin boshlanmoqda…'
       : need > 0 ? 'Yana ' + need + ' kishi kerak. 4 kishi yigʻilsa, oʻyin oʻzi boshlanadi.' : '') + '</p>';
+    if (VC) h += '<div class="voice-row">' + micHTML('big') + '<div class="vtxt" data-vtext>' + voiceTextHTML() + '</div></div>';
     h += '<div class="lobby-actions">';
     if (r.isHost && need > 0) h += btn('fillBots', need === 1 ? 'Boʻsh oʻringa bot qoʻshish' : 'Boʻsh oʻrinlarni botlar bilan toʻldirish', 'primary', S.busy);
     if (r.mySeat < 0 && need === 0) h += '<p class="note">Stol toʻla. Siz tomosha qilyapsiz.</p>';
@@ -403,7 +423,7 @@
     if (g.trick) g.trick.plays.forEach(function (p, i) { plays[p.seat] = { p: p, i: i }; });
 
     let h = '<header class="bar"><button type="button" class="icon" data-act="menu" aria-label="Menyu">' + iconSvg('i-menu') + '</button>' +
-      '<div class="title"><b>Bura</b><span>' + r.round + '-raund</span></div>' + scoreChip(r) + '</header>';
+      '<div class="title"><b>Bura</b><span>' + r.round + '-raund</span></div>' + micHTML('') + scoreChip(r) + '</header>';
     h += '<section class="field">' + GUL + '<div class="opps">' + ['l', 't', 'r'].map(function (p) { return oppHTML(r, seatAt[p], p); }).join('') + '</div>';
     h += '<div class="trick" id="trick">';
     ['l', 't', 'r'].forEach(function (p) { h += slotHTML(r, p, seatAt[p], plays); });
@@ -574,6 +594,129 @@
       a.btns.map(function (b) { return btn(b.act, b.label, b.kind, b.disabled || S.busy); }).join('') + '</div>' : '') + '</div>';
   }
 
+  // ---------- ovozli chat ----------
+  function onVoice(kind) { if (kind === 'talk') paintTalk(); else paintVoice(); }
+
+  function voiceAt(seat) {
+    const list = VC.state.roster;
+    for (let i = 0; i < list.length; i++) if (list[i].seat === seat) return list[i];
+    return null;
+  }
+
+  function micView() {
+    const v = VC.state, n = v.roster.length;
+    if (v.status === 'off') return { cls: 's-off', icon: 'i-mic', badge: n, label: n ? 'Ovozli chatga qoʻshilish: ' + n + ' kishi gaplashyapti' : 'Ovozli chatni yoqish' };
+    if (v.status === 'joining') return { cls: 's-join', icon: 'i-mic', badge: 0, label: v.offline ? 'Ovozli chat qayta ulanmoqda' : 'Ovozli chat ulanmoqda. Bekor qilish' };
+    if (v.mic === 'none') return { cls: 's-listen', icon: 'i-head', badge: 0, label: 'Siz faqat eshityapsiz. Mikrofonni yoqish' };
+    if (v.mic === 'muted') return { cls: 's-mute', icon: 'i-mic-off', badge: 0, label: 'Mikrofon oʻchiq. Yoqish' };
+    return { cls: 's-on', icon: 'i-mic', badge: 0, label: 'Mikrofon yoqiq. Oʻchirish' };
+  }
+  function micClass(size, mv) {
+    const v = VC.state;
+    return 'mic' + (size ? ' ' + size : '') + ' ' + mv.cls + (v.status === 'live' && v.talking.has(v.me) ? ' talk' : '');
+  }
+  function micInner(mv) { return iconSvg(mv.icon) + (mv.badge ? '<b class="vn">' + mv.badge + '</b>' : ''); }
+  function micHTML(size) {
+    if (!VC) return '';
+    const mv = micView();
+    return '<button type="button" class="' + micClass(size, mv) + '" data-size="' + (size || '') + '" data-act="voice" aria-label="' + esc(mv.label) + '">' + micInner(mv) + '</button>';
+  }
+
+  function nameList(a) {
+    if (a.length <= 2) return a.join(' va ');
+    return a.slice(0, 2).join(', ') + ' va yana ' + (a.length - 2) + ' kishi';
+  }
+  function voiceTextHTML() {
+    const v = VC.state;
+    const others = v.roster.filter(function (e) { return e.v !== v.me; }).map(function (e) { return e.name; });
+    let title, sub;
+    if (v.status === 'off') {
+      title = 'Ovozli chat';
+      sub = others.length ? nameList(others) + ' gaplashyapti — qoʻshiling' : 'Stoldagilar bilan ovozli gaplashing';
+    } else if (v.status === 'joining') {
+      title = v.offline ? 'Qayta ulanmoqda…' : 'Ulanmoqda…';
+      sub = v.offline ? 'Aloqa tiklanishini kutyapmiz' : 'Mikrofonga ruxsat bering';
+    } else {
+      title = v.mic === 'none' ? 'Siz faqat eshityapsiz' : v.mic === 'muted' ? 'Mikrofoningiz oʻchiq' : 'Siz ovozli chatdasiz';
+      sub = others.length ? nameList(others) + ' ham shu yerda' : 'Hozircha faqat siz';
+    }
+    return '<span><b>' + title + '</b><small>' + esc(sub) + '</small></span>' +
+      (v.status !== 'off' ? '<button type="button" class="mini-btn" data-act="voice-leave">Chiqish</button>' : '');
+  }
+
+  function voiceRole(e) {
+    const r = S.room;
+    if (e.seat < 0) return 'tomoshabin';
+    if (!r || r.myTeam < 0) return (e.seat % 2 + 1) + '-jamoa';
+    return e.seat % 2 === r.myTeam ? 'sherigingiz' : 'raqib';
+  }
+  function voicePanelHTML() {
+    const v = VC.state;
+    let h = '';
+    if (v.roster.length) {
+      h += '<ul class="vlist">' + v.roster.map(function (e) {
+        const me = e.v === v.me;
+        let note = e.mic === false ? 'faqat eshitadi' : e.muted ? 'mikrofon oʻchiq' : 'mikrofon yoqiq';
+        if (!me && v.status === 'live') {
+          const st = VC.peerState(e.v);
+          if (st === 'fail') note = 'ulanib boʻlmadi';
+          else if (st !== 'ok') note = 'ulanmoqda…';
+        }
+        const off = v.silenced.has(e.v);
+        return '<li class="vrow' + (v.talking.has(e.v) ? ' talk' : '') + '" data-vrow="' + esc(e.v) + '"><i class="vdot"></i>' +
+          '<span class="vname"><b>' + esc(me ? 'Siz' : e.name) + '</b><small>' + (me ? '' : voiceRole(e) + ' · ') + note + '</small></span>' +
+          (!me && v.status === 'live'
+            ? '<button type="button" class="vbtn' + (off ? ' off' : '') + '" data-act="vsilence" data-v="' + esc(e.v) + '" aria-pressed="' + off + '" aria-label="' +
+              esc(e.name) + (off ? ': ovozini yoqish' : ': ovozini oʻchirish') + '">' + iconSvg(off ? 'i-vol-off' : 'i-vol') + '</button>'
+            : '') + '</li>';
+      }).join('') + '</ul>';
+    } else {
+      h += '<p class="sub">Hozircha hech kim yoʻq.</p>';
+    }
+    h += '<div class="btns">';
+    if (v.status === 'off') h += btn('voice', 'Qoʻshilish', 'primary');
+    else {
+      if (v.status === 'live') h += btn('voice', v.mic === 'on' ? 'Mikrofonni oʻchirish' : 'Mikrofonni yoqish', 'secondary');
+      h += btn('voice-leave', 'Chiqish', 'danger');
+    }
+    return h + '</div>';
+  }
+
+  // Tez-tez chaqiriladi: faqat oʻzgargan joylar yangilanadi
+  function setHTML(el, html) { if (el.__h !== html) { el.__h = html; el.innerHTML = html; } }
+  function paintVoice() {
+    if (!VC) return;
+    const v = VC.state, mv = micView();
+    app.querySelectorAll('.mic[data-act="voice"]').forEach(function (b) {
+      const cls = micClass(b.getAttribute('data-size'), mv);
+      if (b.className !== cls) b.className = cls;
+      b.setAttribute('aria-label', mv.label);
+      setHTML(b, micInner(mv));
+    });
+    app.querySelectorAll('[data-vs]').forEach(function (el) {
+      const e = voiceAt(Number(el.getAttribute('data-vs')));
+      el.classList.toggle('v-in', !!e);
+      el.classList.toggle('v-mute', !!e && (e.muted || e.mic === false));
+      el.classList.toggle('v-talk', !!e && v.talking.has(e.v));
+    });
+    const t = app.querySelector('[data-vtext]');
+    if (t) setHTML(t, voiceTextHTML());
+    const p = app.querySelector('[data-vpanel]');
+    if (p) setHTML(p, voicePanelHTML());
+    if (v.blocked && !S.voiceBlocked) { S.voiceBlocked = true; toast('Ovozni eshitish uchun ekranga bir marta bosing'); }
+    if (!v.blocked) S.voiceBlocked = false;
+  }
+  function paintTalk() {
+    if (!VC) return;
+    const v = VC.state, meTalk = v.status === 'live' && v.talking.has(v.me);
+    app.querySelectorAll('.mic[data-act="voice"]').forEach(function (b) { b.classList.toggle('talk', meTalk); });
+    app.querySelectorAll('[data-vs]').forEach(function (el) {
+      const e = voiceAt(Number(el.getAttribute('data-vs')));
+      el.classList.toggle('v-talk', !!e && v.talking.has(e.v));
+    });
+    app.querySelectorAll('[data-vrow]').forEach(function (el) { el.classList.toggle('talk', v.talking.has(el.getAttribute('data-vrow'))); });
+  }
+
   // ---------- pastdan chiquvchi oynalar ----------
   function openSheet(type) { S.sheet = { type: type }; S.sheetAnim = true; render(); }
 
@@ -613,6 +756,10 @@
   function menuHTML(r) {
     let h = '<h2>Hisob</h2><p class="sub">' + (r.round ? r.round + '-raund. ' + r.target + ' ballga yetgan jamoa matchni yutadi.' : 'Oʻyin hali boshlanmadi') + '</p>' + teamsHTML(r, null);
     if (r.matchWins[0] || r.matchWins[1]) h += '<p class="sub">Yutilgan matchlar: ' + r.matchWins[r.myTeam === 1 ? 1 : 0] + ' : ' + r.matchWins[r.myTeam === 1 ? 0 : 1] + '</p>';
+    if (VC) {
+      h += '<h3>Ovozli chat</h3><div data-vpanel>' + voicePanelHTML() + '</div>' +
+        '<p class="vnote">Ovoz toʻgʻridan-toʻgʻri qatnashchilar oʻrtasida uzatiladi va yozib olinmaydi. Bir xonada oʻtirgan boʻlsangiz, quloqchin taqing — aks holda ovoz qaytadi.</p>';
+    }
     h += '<div class="lobby-actions">' + btn('rules', 'Qoidalar', 'secondary');
     if (!DEMO) h += btn('share', 'Doʻstlarni chaqirish', 'secondary');
     if (r.mySeat >= 0 && !r.seats[r.mySeat].auto && r.phase !== 'lobby') h += btn('leave', 'Stoldan chiqish', 'danger');
@@ -753,6 +900,9 @@
       case 'next': S.sheet = null; return send({ t: 'next' }, true);
       case 'lobby': S.sheet = null; return send({ t: 'lobby' }, true);
       case 'create': return send({ t: 'create' }, true);
+      case 'voice': if (VC) VC.toggleMic(); return;
+      case 'voice-leave': if (VC) VC.leave(); return;
+      case 'vsilence': if (VC) VC.silence(el.getAttribute('data-v')); return;
     }
   }
 
@@ -774,6 +924,12 @@
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape' && S.sheet) handle('close', null);
   });
+  // Brauzer ovozni toʻsib qoʻysa, istalgan bosish uni ochadi
+  if (VC) {
+    const unlockVoice = function () { if (VC.state.blocked) VC.unlock(); };
+    document.addEventListener('click', unlockVoice, true);
+    document.addEventListener('touchend', unlockVoice, true);
+  }
 
   function toast(msg) {
     toastEl.textContent = msg;
@@ -795,7 +951,7 @@
   setInterval(tick, 250);
 
   // Sinov uchun (faqat ?dev=1 yoki demo rejimida)
-  if (qs.get('dev') || DEMO) window.__bura = { S: S, send: send };
+  if (qs.get('dev') || DEMO) window.__bura = { S: S, send: send, voice: VC, drop: function () { if (T && T.drop) T.drop(); } };
 
   // ---------- ishga tushirish ----------
   initTelegram();
