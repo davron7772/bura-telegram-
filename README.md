@@ -11,7 +11,7 @@ Guruhda `/bura` deb yoziladi. Bot oʻyin stolini ochib, «🎮 Oʻyinga kirish»
 - **Ovozli chat** — stoldagilar Mini App ichida bir-biri bilan gaplashadi; kim gapirayotgani avatarida koʻrinib turadi.
 - **Server** — 4 kishini real vaqtda bogʻlaydi va qoidalarni tekshiradi. Kartalar serverda saqlanadi, shuning uchun hech kim boshqaning kartasini koʻra olmaydi.
 - **Kompyuter oʻyinchilari** — odam yetmasa, stol egasi boʻsh oʻrinlarga bot qoʻshadi. Kimdir chiqib ketsa yoki vaqtida yurmasa, uning oʻrniga avtomatik yuriladi.
-- **Hisob** — gʻolib jamoa raundda 2, 4 yoki 6 ball oladi; 12 ballga birinchi yetgan jamoa matchni yutadi.
+- **Hisob** — raundda yutqazgan jamoaga 2, 4 yoki 6 ball yoziladi; 14 ballga yetgan jamoa matchni yutqazadi, aynan 12 ballda esa shans beriladi.
 
 ## 1-qadam. Bot yaratish
 
@@ -97,7 +97,9 @@ Ovoz telefonlar oʻrtasida toʻgʻridan-toʻgʻri (WebRTC) uzatiladi. Server faq
 - **Bura** — qoʻldagi 4 kartaning hammasi koʻzir: navbatsiz yuradi (dastur buni avtomatik qiladi).
 - **4 ta tuz** — mutlaq gʻalaba (6 ball).
 - Kartalar tugagach jamoa ochkolari sanaladi: 61 va undan koʻp — gʻalaba, 60:60 — durang.
-- Gʻolib jamoa ball oladi: raqib 31+ ochko olgan boʻlsa — 2, 31 dan kam — 4, birorta ham karta olmagan boʻlsa — 6. 12 ballga birinchi yetgan jamoa matchni yutadi.
+- Raundda yutqazgan jamoaga ball yoziladi: 31 va undan koʻp ochko olgan boʻlsa — 2, 31 dan kam — 4, birorta ham karta ololmagan boʻlsa yoki raqibda 4 ta tuz chiqsa — 6.
+- Ball qancha kam boʻlsa, shuncha yaxshi: 14 va undan koʻp ball toʻplagan jamoa matchni yutqazadi.
+- Aynan 12 ballda jamoaga shans beriladi — yana oʻynaydi. Yutsa, 12 da qoladi va keyingi raund ham shans boʻladi; yana yutqazsa, 14+ ball boʻlib matchni boy beradi.
 
 Qoidalar `src/engine.js` faylida jamlangan; boshqa mahalliy variant kerak boʻlsa, oʻsha yerda oʻzgartiriladi.
 

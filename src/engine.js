@@ -32,7 +32,9 @@
   const N = 4;       // oʻyinchilar
   const HAND = 4;    // qoʻldagi kartalar
   const WIN = 61;    // raundda gʻalaba uchun jamoa ochkosi
-  const MATCH = 12;  // match uchun ball
+  // Match: raundda yutqazgan jamoaga ball yoziladi (2, 4 yoki 6).
+  const MATCH_LOSE = 14; // shuncha va undan koʻp ball toʻplagan jamoa matchni yutqazadi
+  const MATCH_EDGE = 12; // aynan 12 ball — "shans": jamoa yana bir raund oʻynaydi
   const RANK_INDEX = {};
   RANKS.forEach(function (r, i) { RANK_INDEX[r] = i; });
   const DECK = makeDeck();
@@ -228,6 +230,7 @@
     return endRound(st, { type: team < 0 ? 'draw' : 'win', seat: -1, team: team });
   }
 
+  // Raundda yutqazgan jamoaga yoziladigan ball
   function awardFor(st, r) {
     if (r.type === 'draw') return 0;
     if (r.type === 'aces') return 6;
@@ -384,6 +387,16 @@
     return v;
   }
 
+  // Raund natijasini match hisobiga yozish: ball yutqazgan jamoaga qoʻshiladi.
+  // 14+ ball — match yutqazildi. Aynan 12 ball — "shans": jamoa oʻynashda davom etadi
+  // (yutsa 12 da qoladi, yana yutqazsa 14+ boʻlib matchni boy beradi).
+  function addToMatch(score, winTeam, award) {
+    const s = score.slice();
+    const loser = winTeam === 0 || winTeam === 1 ? 1 - winTeam : -1;
+    if (loser >= 0 && award > 0) s[loser] += award;
+    return { score: s, loser: loser, matchLoser: loser >= 0 && s[loser] >= MATCH_LOSE ? loser : -1 };
+  }
+
   function resultView(st) {
     const r = st.result;
     if (!r) return null;
@@ -511,13 +524,13 @@
   }
 
   return {
-    SUITS: SUITS, RANKS: RANKS, POINTS: POINTS, N: N, HAND: HAND, WIN: WIN, MATCH: MATCH,
+    SUITS: SUITS, RANKS: RANKS, POINTS: POINTS, N: N, HAND: HAND, WIN: WIN, MATCH_LOSE: MATCH_LOSE, MATCH_EDGE: MATCH_EDGE,
     makeDeck: makeDeck, shuffle: shuffle, rankOf: rankOf, suitOf: suitOf, strength: strength,
     points: points, sumPoints: sumPoints, isCard: isCard, teamOf: teamOf,
     beats: beats, setBeats: setBeats, combos: combos, isValidLead: isValidLead, legalLeads: legalLeads,
     beatingSets: beatingSets, canBeatWith: canBeatWith, isBura: isBura, isFourAces: isFourAces,
     newRound: newRound, act: act, collect: collect, takeEvents: takeEvents,
-    viewFor: viewFor, resultView: resultView, teamPoints: teamPoints, teamKnown: teamKnown, seatPoints: seatPoints,
+    viewFor: viewFor, resultView: resultView, addToMatch: addToMatch, teamPoints: teamPoints, teamKnown: teamKnown, seatPoints: seatPoints,
     AI: { choose: aiChoose }
   };
 });

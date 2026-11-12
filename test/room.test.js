@@ -87,12 +87,15 @@ test('vaqtida yurmasa avtomatik yuriladi; ball qoʻshiladi; birinchi yurish navb
   while (r.phase === 'playing' && guard++ < 400) c.advance(30000);
   assert.equal(r.phase, 'roundEnd');
   const res = r.lastResult;
-  if (res.type !== 'draw') assert.equal(r.score[res.team], res.award);
+  if (res.type !== 'draw') {
+    assert.equal(r.score[1 - res.team], res.award, 'ball yutqazgan jamoaga');
+    assert.equal(r.score[res.team], 0);
+  }
   assert.equal(r.nextRound('u2'), null);
   assert.equal(r.firstLeader, (first + 1) % 4, 'keyingi raundda keyingi oʻyinchi boshlaydi');
 });
 
-test('stol egasi + 3 bot: match 12 ballgacha, keyin yangi match', () => {
+test('stol egasi + 3 bot: match 14 ballgacha (12 — shans), keyin yangi match', () => {
   const c = fakeClock();
   const r = makeRoom(c);
   r.connect(users[0]);
@@ -100,7 +103,8 @@ test('stol egasi + 3 bot: match 12 ballgacha, keyin yangi match', () => {
   c.advance(1000);
   let leaders = [];
   let matchDone = false;
-  for (let round = 0; round < 60 && !matchDone; round++) {
+  let before = [0, 0];
+  for (let round = 0; round < 80 && !matchDone; round++) {
     leaders.push(r.firstLeader);
     let guard = 0;
     while (r.phase === 'playing' && guard++ < 500) {
@@ -112,12 +116,21 @@ test('stol egasi + 3 bot: match 12 ballgacha, keyin yangi match', () => {
     }
     assert.equal(r.phase, 'roundEnd');
     const res = r.lastResult;
-    assert.ok(res.score[0] <= 12 + 5 && res.score[1] <= 12 + 5);
+    // Hisob E.addToMatch qoidasiga toʻliq mos
+    const exp = E.addToMatch(before, res.type === 'draw' ? -1 : res.team, res.award);
+    assert.deepEqual(res.score, exp.score);
+    assert.equal(res.matchLoser, exp.matchLoser);
+    assert.equal(res.loser, exp.loser);
     if (res.matchOver) {
       matchDone = true;
-      assert.ok(res.score[res.matchWinner] >= 12);
+      assert.ok(res.score[res.matchLoser] >= 14, 'yutqazgan jamoa 14+ ball');
+      assert.ok(res.score[res.matchWinner] <= 12, 'gʻolib jamoa 12 dan oshmagan');
+      assert.equal(res.matchWinner, 1 - res.matchLoser);
       assert.equal(r.matchWins[res.matchWinner], 1);
+    } else {
+      assert.ok(res.score[0] <= 12 && res.score[1] <= 12, 'match davom etsa, hech kim 12 dan oshmagan');
     }
+    before = res.score.slice();
     r.nextRound('u1');
   }
   assert.ok(matchDone, 'match tugashi kerak');

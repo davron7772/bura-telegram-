@@ -118,7 +118,7 @@ test('server: 4 kishi bitta stolda toʻliq raund oʻynaydi', { timeout: 90000 },
     const res = A.room.result;
     assert.ok(res && res.type);
     if (res.type !== 'aces') assert.equal(res.points[0] + res.points[1], 120);
-    if (res.type === 'win' || res.type === 'aces') assert.equal(A.room.score[res.team], res.award);
+    if (res.type === 'win' || res.type === 'aces') assert.equal(A.room.score[1 - res.team], res.award, 'ball yutqazgan jamoaga');
 
     // Keyingi raund
     others[1].send({ t: 'next' });

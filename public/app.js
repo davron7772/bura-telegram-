@@ -257,6 +257,10 @@
         haptic('warning');
       }
     }
+    if (ev.kind === 'deal') {
+      const note = edgeNote(room); // shans raundi haqida eslatma
+      if (note) { toast(note); haptic('warning'); }
+    }
     if (ev.kind === 'win' || ev.kind === 'aces') haptic(room.myTeam === ev.team ? 'success' : 'error');
     else if (ev.kind === 'bura') haptic('heavy');
     else if (ev.kind === 'beat' && ev.seat !== room.mySeat) haptic('light');
@@ -407,11 +411,29 @@
     return h;
   }
 
+  // Match hisobi: ball yutqazgan jamoaga yoziladi — kami yaxshi. 12 ball qizil bilan belgilanadi.
   function scoreChip(r) {
     const us = r.myTeam >= 0 ? r.myTeam : 0;
     const label = r.myTeam >= 0 ? ['Biz', 'Ular'] : ['1-j.', '2-j.'];
-    return '<div class="score" aria-label="Hisob: ' + label[0] + ' ' + r.score[us] + ', ' + label[1] + ' ' + r.score[1 - us] + ', ' + r.target + ' ballgacha">' +
-      '<small>' + label[0] + '</small><b>' + r.score[us] + '</b><i>:</i><b>' + r.score[1 - us] + '</b><small>' + label[1] + '</small></div>';
+    const num = function (t) { return '<b' + (r.score[t] >= r.edge ? ' class="edge"' : '') + '>' + r.score[t] + '</b>'; };
+    return '<div class="score" aria-label="Hisob: ' + label[0] + ' ' + r.score[us] + ', ' + label[1] + ' ' + r.score[1 - us] + '. ' + r.lose + ' ballga yetgan jamoa yutqazadi">' +
+      '<small>' + label[0] + '</small>' + num(us) + '<i>:</i>' + num(1 - us) + '<small>' + label[1] + '</small></div>';
+  }
+
+  // "Raqiblarga", "Sizning jamoangizga", "2-jamoaga"
+  function teamTo(r, t) { return teamName(r, t) + 'ga'; }
+
+  // 12 ballda turgan jamoa uchun har bir raund — shans
+  function edgeNote(r) {
+    if (r.matchOver) return '';
+    const at = [0, 1].filter(function (t) { return r.score[t] >= r.edge && r.score[t] < r.lose; });
+    if (!at.length) return '';
+    if (at.length === 2) return 'Ikkala jamoa ham ' + r.edge + ' ballda: keyingi raundda yutqazgan jamoa matchni boy beradi.';
+    const t = at[0];
+    if (r.myTeam < 0) return (t + 1) + '-jamoa ' + r.edge + ' ballda — shans: yana yutqazsa, matchni boy beradi.';
+    return t === r.myTeam
+      ? 'Jamoangiz ' + r.edge + ' ballda — bu shans: yutsangiz, oʻyin davom etadi, yutqazsangiz — match tugaydi.'
+      : 'Raqiblar ' + r.edge + ' ballda — keyingi raundni yutsangiz, match sizniki.';
   }
 
   function tableHTML(r) {
@@ -537,9 +559,9 @@
   function resultShort(r) {
     const res = r.result;
     if (!res) return '';
-    if (res.type === 'draw') return '60:60 — durang';
-    const name = esc(teamName(r, res.team));
-    return (res.type === 'aces' ? '4 ta tuz! ' : '') + name + ' yutdi, +' + res.award + ' ball';
+    if (res.type === 'draw') return '60:60 — durang, ball yozilmadi';
+    return (res.type === 'aces' ? '4 ta tuz! ' : '') + esc(teamName(r, res.team)) + ' yutdi. ' +
+      esc(teamTo(r, 1 - res.team)) + ' +' + res.award + ' ball';
   }
 
   function actionsFor(r) {
@@ -743,7 +765,8 @@
       const win = res && res.team === t && res.type !== 'draw';
       h += '<div class="tcol' + (win ? ' win' : '') + '"><div class="tname">' + esc(teamName(r, t)) + '</div>' +
         (res ? '<div class="tpts">' + res.points[t] + '<small> ochko</small></div>' : '') +
-        '<div class="tscore">' + r.score[t] + ' <small>ball</small></div><ul>';
+        '<div class="tscore' + (r.score[t] >= r.edge ? ' edge' : '') + '">' + r.score[t] + ' <small>ball</small>' +
+        (res && res.type !== 'draw' && t !== res.team ? ' <em>+' + res.award + '</em>' : '') + '</div><ul>';
       for (let i = t; i < 4; i += 2) {
         const s = r.seats[i];
         h += '<li>' + (s ? esc(s.name) + (s.you && s.name !== 'Siz' ? ' <small>siz</small>' : '') : '—') + (res ? '<span>' + res.totals[i] + '</span>' : '') + '</li>';
@@ -754,7 +777,9 @@
   }
 
   function menuHTML(r) {
-    let h = '<h2>Hisob</h2><p class="sub">' + (r.round ? r.round + '-raund. ' + r.target + ' ballga yetgan jamoa matchni yutadi.' : 'Oʻyin hali boshlanmadi') + '</p>' + teamsHTML(r, null);
+    let h = '<h2>Hisob</h2><p class="sub">' + (r.round ? r.round + '-raund. Raundda yutqazgan jamoaga ball yoziladi; ' + r.lose + ' ballga yetgan jamoa matchni boy beradi.' : 'Oʻyin hali boshlanmadi') + '</p>' + teamsHTML(r, null);
+    const note = edgeNote(r);
+    if (note) h += '<p class="match edge">' + note + '</p>';
     if (r.matchWins[0] || r.matchWins[1]) h += '<p class="sub">Yutilgan matchlar: ' + r.matchWins[r.myTeam === 1 ? 1 : 0] + ' : ' + r.matchWins[r.myTeam === 1 ? 0 : 1] + '</p>';
     if (VC) {
       h += '<h3>Ovozli chat</h3><div data-vpanel>' + voicePanelHTML() + '</div>' +
@@ -768,11 +793,12 @@
     return h;
   }
 
-  function awardReason(res) {
-    if (res.type === 'aces') return 'mutlaq gʻalaba';
-    if (res.award === 6) return 'raqiblar birorta ham karta olmadi';
-    if (res.award === 4) return 'raqiblar 31 ochkoga yetmadi';
-    return 'raqiblar 31+ ochko oldi';
+  // Yutqazgan jamoaga nega shuncha ball yozilgani
+  function lossReason(res, we) {
+    if (res.type === 'aces') return '';
+    if (res.award === 6) return we ? 'birorta ham karta ololmadingiz' : 'birorta ham karta ololmadi';
+    if (res.award === 4) return we ? '31 ochkoga yetmadingiz' : '31 ochkoga yetmadi';
+    return we ? '31 va undan koʻp ochko oldingiz' : '31 va undan koʻp ochko oldi';
   }
 
   function resultHTML(r) {
@@ -780,24 +806,32 @@
     let title, sub = '', cards = '', big = false;
     if (res.type === 'draw') {
       title = 'Durang';
-      sub = '60:60 — hech kimga ball berilmaydi.';
+      sub = '60:60 — hech kimga ball yozilmaydi.';
     } else {
       const ours = mine && res.team === r.myTeam;
+      const lost = 1 - res.team;
+      const why = lossReason(res, mine && lost === r.myTeam);
+      const pen = esc(teamTo(r, lost)) + ' +' + res.award + ' ball' + (why ? ' — ' + why : '') + '.';
       if (res.type === 'aces') {
         big = true;
         title = '4 ta tuz!';
         cards = '<div class="reveal">' + res.cards.map(function (c) { return cardHTML(c, { size: 'xs' }); }).join('') + '</div>';
-        sub = esc(seatName(r, res.seat)) + ' — ' + esc(teamName(r, res.team)).toLowerCase() + ' mutlaq yutdi. +' + res.award + ' ball.';
+        sub = esc(seatName(r, res.seat)) + ' — ' + esc(teamName(r, res.team)).toLowerCase() + ' mutlaq yutdi. ' + pen;
       } else {
         title = !mine ? (res.team + 1) + '-jamoa yutdi' : ours ? 'Siz yutdingiz!' : 'Raqiblar yutdi';
-        sub = '+' + res.award + ' ball — ' + awardReason(res) + '.';
+        sub = pen;
       }
     }
     let h = '<h2' + (big ? ' class="big"' : '') + '>' + title + '</h2><p class="sub">' + sub + '</p>' + cards + teamsHTML(r, res);
     if (res.matchOver) {
-      const w = res.matchWinner;
-      h += '<p class="match">' + (mine ? (w === r.myTeam ? 'Match sizniki! ' : 'Matchni raqiblar yutdi. ') : (w + 1) + '-jamoa matchni yutdi. ') +
+      const L = res.matchLoser, n = r.score[L];
+      h += '<p class="match">' + (mine
+        ? (L === r.myTeam ? 'Jamoangiz ' + n + ' ballga yetdi — match boy berildi. ' : 'Raqiblar ' + n + ' ballga yetdi — match sizniki! ')
+        : (L + 1) + '-jamoa ' + n + ' ballga yetdi — ' + (2 - L) + '-jamoa matchni yutdi. ') +
         'Keyingi raund yangi match boʻlib boshlanadi.</p>';
+    } else {
+      const note = edgeNote(r);
+      if (note) h += '<p class="match edge">' + note + '</p>';
     }
     h += '<div class="btns">';
     const me = r.mySeat;
@@ -828,8 +862,9 @@
       '<li><b>4 ta tuz</b> — mutlaq gʻalaba.</li></ul>' +
       '<h3>Hisob</h3><ul class="rules">' +
       '<li>Kartalar tugagach jamoa ochkolari sanaladi: 61 va undan koʻp — gʻalaba, 60:60 — durang.</li>' +
-      '<li>Gʻolib jamoa ball oladi: raqib 31+ ochko olgan boʻlsa — 2, 31 dan kam — 4, birorta ham karta olmagan boʻlsa yoki 4 ta tuz — 6.</li>' +
-      '<li>12 ballga birinchi yetgan jamoa matchni yutadi.</li>' +
+      '<li>Raundda yutqazgan jamoaga ball yoziladi: 31 va undan koʻp ochko olgan boʻlsa — 2, 31 dan kam — 4, birorta ham karta ololmagan boʻlsa yoki raqibda 4 ta tuz chiqsa — 6.</li>' +
+      '<li>Ball qancha kam boʻlsa, shuncha yaxshi: 14 va undan koʻp ball toʻplagan jamoa matchni yutqazadi.</li>' +
+      '<li>Aynan 12 ballda jamoaga shans beriladi — yana oʻynaydi. Yutsa, 12 da qoladi; yana yutqazsa, matchni boy beradi.</li>' +
       '<li>Har yurishga vaqt beriladi — tugasa, avtomatik yuriladi.</li></ul>' +
       '<div class="btns">' + btn('close', 'Tushunarli', 'primary') + '</div>';
   }

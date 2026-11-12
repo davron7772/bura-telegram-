@@ -37,7 +37,7 @@
     this.game = null;
     this.round = 0;
     this.firstLeader = -1;
-    this.score = [0, 0];      // match ballari
+    this.score = [0, 0];      // match ballari (yutqazgan jamoaga yoziladi — kami yaxshi)
     this.matchWins = [0, 0];
     this.matchNo = 1;
     this.matchOver = false;
@@ -321,19 +321,22 @@
 
   P.finishRound = function () {
     const r = this.game.result;
-    if (r.team >= 0 && r.award) this.score[r.team] += r.award;
-    let matchWinner = -1;
-    if (this.score[0] >= E.MATCH || this.score[1] >= E.MATCH) {
-      matchWinner = this.score[0] >= E.MATCH ? 0 : 1;
+    // Ball raundda yutqazgan jamoaga yoziladi (qoida — E.addToMatch)
+    const m = E.addToMatch(this.score, r.team, r.award);
+    const loser = m.loser, matchLoser = m.matchLoser;
+    this.score = m.score;
+    if (matchLoser >= 0) {
       this.matchOver = true;
-      this.matchWins[matchWinner]++;
+      this.matchWins[1 - matchLoser]++;
     }
     this.phase = 'roundEnd';
     this.lastResult = Object.assign({}, E.resultView(this.game), {
       round: this.round,
+      loser: loser,
       score: this.score.slice(),
       matchOver: this.matchOver,
-      matchWinner: matchWinner,
+      matchLoser: matchLoser,
+      matchWinner: matchLoser >= 0 ? 1 - matchLoser : -1,
       matchWins: this.matchWins.slice()
     });
     if (this.timer) this.clearTimer(this.timer);
@@ -466,7 +469,8 @@
         };
       }),
       score: this.score.slice(),
-      target: E.MATCH,
+      lose: E.MATCH_LOSE,
+      edge: E.MATCH_EDGE,
       matchNo: this.matchNo,
       matchWins: this.matchWins.slice(),
       matchOver: this.matchOver,

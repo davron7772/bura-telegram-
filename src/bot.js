@@ -2,7 +2,7 @@
 /* Telegram bot: /bura buyrugʻi, guruhdagi stol xabari, qoidalar. */
 const crypto = require('crypto');
 const { sleep, esc, displayName } = require('./util');
-const E_MATCH = require('./engine').MATCH;
+const { MATCH_LOSE, MATCH_EDGE } = require('./engine');
 
 const ALLOWED_UPDATES = ['message', 'my_chat_member'];
 
@@ -29,7 +29,7 @@ const RULES = [
   '🔥 <b>Bura</b> — qoʻldagi 4 kartaning hammasi koʻzir: navbatsiz yuradi.',
   '👑 <b>4 ta tuz</b> — mutlaq gʻalaba.',
   '',
-  '<b>Hisob:</b> kartalar tugagach jamoa ochkolari sanaladi. 61 va undan koʻp — gʻalaba, 60:60 — durang. Gʻolib jamoa ball oladi: raqib 31+ ochko olgan boʻlsa — 2, 31 dan kam — 4, birorta ham karta olmagan boʻlsa yoki 4 ta tuz — 6. 12 ballga birinchi yetgan jamoa matchni yutadi.'
+  '<b>Hisob:</b> kartalar tugagach jamoa ochkolari sanaladi. 61 va undan koʻp — gʻalaba, 60:60 — durang. Raundda yutqazgan jamoaga ball yoziladi: 31 va undan koʻp ochko olgan boʻlsa — 2, 31 dan kam — 4, birorta ham karta ololmagan boʻlsa yoki raqibda 4 ta tuz chiqsa — 6. 14 va undan koʻp ball toʻplagan jamoa matchni yutqazadi. Aynan 12 ballda jamoaga shans beriladi — yana oʻynaydi: yutsa, 12 da qoladi, yana yutqazsa, matchni boy beradi.'
 ].join('\n');
 
 const HELP = [
@@ -83,10 +83,11 @@ function createBot(opts) {
 
   function resultLine(room, r) {
     switch (r.type) {
-      case 'win': return '🏆 ' + (r.team + 1) + '-jamoa yutdi: ' + r.points[r.team] + ' ochko (+' + r.award + ' ball)';
+      // ball yutqazgan jamoaga yoziladi: (2 - team) — yutqazgan jamoaning raqami
+      case 'win': return '🏆 ' + (r.team + 1) + '-jamoa yutdi: ' + r.points[r.team] + ' ochko (' + (2 - r.team) + '-jamoaga +' + r.award + ' ball)';
       case 'aces': {
         const s = room.seats[r.seat];
-        return '👑 4 ta tuz! ' + (s ? esc(s.name) : '') + ' — ' + (r.team + 1) + '-jamoa yutdi (+' + r.award + ' ball)';
+        return '👑 4 ta tuz! ' + (s ? esc(s.name) : '') + ' — ' + (r.team + 1) + '-jamoa yutdi (' + (2 - r.team) + '-jamoaga +' + r.award + ' ball)';
       }
       default: return '🤝 60:60 — durang';
     }
@@ -103,13 +104,17 @@ function createBot(opts) {
       L.push(filled >= 4 ? '⏳ Oʻyin boshlanmoqda…' : '⏳ Yana ' + (4 - filled) + ' kishi kerak. 4 kishi yigʻilsa, oʻyin oʻzi boshlanadi.');
     } else {
       L.push('🎲 ' + room.round + '-raund ' + (room.phase === 'playing' ? 'ketmoqda' : 'tugadi'));
-      L.push('Hisob (' + E_MATCH + ' ballgacha):');
-      L.push('1-jamoa (' + teamNames(room, 0) + ') — <b>' + room.score[0] + '</b>');
-      L.push('2-jamoa (' + teamNames(room, 1) + ') — <b>' + room.score[1] + '</b>');
+      // 12 ballda turgan jamoa — shans raundida
+      const edge = function (t) {
+        return !room.matchOver && room.score[t] >= MATCH_EDGE && room.score[t] < MATCH_LOSE ? ' ⚠️ shans' : '';
+      };
+      L.push('Hisob (yutqazgan jamoaga yoziladi, ' + MATCH_LOSE + ' ballga yetgan jamoa yutqazadi):');
+      L.push('1-jamoa (' + teamNames(room, 0) + ') — <b>' + room.score[0] + '</b>' + edge(0));
+      L.push('2-jamoa (' + teamNames(room, 1) + ') — <b>' + room.score[1] + '</b>' + edge(1));
       const r = room.lastResult;
       if (r) {
         L.push('', 'Oxirgi raund: ' + resultLine(room, r));
-        if (r.matchOver) L.push('🎉 Match: ' + (r.matchWinner + 1) + '-jamoa yutdi!');
+        if (r.matchOver) L.push('🎉 Match: ' + (r.matchWinner + 1) + '-jamoa yutdi! (' + (r.matchLoser + 1) + '-jamoa ' + r.score[r.matchLoser] + ' ballga yetdi)');
       }
     }
     return L.join('\n');

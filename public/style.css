@@ -488,6 +488,10 @@ svg { display: block; }
 .tcol li span { color: var(--muted-indigo); flex: none; }
 .tcol li small { color: var(--muted-indigo); }
 .match { margin: 12px 0 0; padding: 12px 14px; border-radius: 12px; background: rgba(240, 180, 60, .12); font-weight: 600; }
+/* 12 ball — shans: ogohlantiruvchi rang */
+.match.edge { background: rgba(255, 138, 128, .13); }
+.score b.edge, .tscore.edge { color: #ffb4a6; }
+.tscore em { font-style: normal; font-size: 14px; color: #ffb4a6; }
 .scores { list-style: none; margin: 10px 0 0; padding: 0; }
 .scores li { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 14px; padding: 10px 2px; border-bottom: 1px solid rgba(163, 166, 200, .16); font-size: 16px; }
 .scores li:last-child { border-bottom: 0; }

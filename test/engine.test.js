@@ -223,3 +223,30 @@ test('koʻp marta toʻliq simulyatsiya: kartalar yoʻqolmaydi, yopiq karta oxiri
   assert.ok(buras > 0 && changes > 0, 'bura va koʻzir almashishi uchrashi kerak');
   assert.ok(awards[2] && awards[4], JSON.stringify(awards));
 });
+
+test('match hisobi: ball yutqazgan jamoaga, 12 — shans, 14+ — yutqazish', () => {
+  const m = (score, win, award) => E.addToMatch(score, win, award);
+  assert.equal(E.MATCH_LOSE, 14);
+  assert.equal(E.MATCH_EDGE, 12);
+
+  assert.deepEqual(m([0, 0], 0, 2), { score: [0, 2], loser: 1, matchLoser: -1 }, 'gʻolibga emas, yutqazganga');
+  assert.deepEqual(m([4, 6], -1, 0), { score: [4, 6], loser: -1, matchLoser: -1 }, 'durang — ball yoʻq');
+
+  // Aynan 12 — shans: match tugamaydi
+  assert.deepEqual(m([10, 0], 1, 2), { score: [12, 0], loser: 0, matchLoser: -1 });
+  assert.deepEqual(m([6, 2], 1, 6), { score: [12, 2], loser: 0, matchLoser: -1 });
+  // 12 dagi jamoa yutsa — 12 da qoladi, oʻyin davom etadi
+  assert.deepEqual(m([12, 2], 0, 6), { score: [12, 8], loser: 1, matchLoser: -1 });
+  // 12 dagi jamoa yana yutqazsa — 14+, match tugadi
+  assert.deepEqual(m([12, 8], 1, 2), { score: [14, 8], loser: 0, matchLoser: 0 });
+  assert.deepEqual(m([12, 8], 1, 6), { score: [18, 8], loser: 0, matchLoser: 0 });
+  // 12 ni "sakrab oʻtsa" ham — yutqazdi
+  assert.deepEqual(m([10, 0], 1, 4), { score: [14, 0], loser: 0, matchLoser: 0 });
+  assert.deepEqual(m([0, 8], 0, 6), { score: [0, 14], loser: 1, matchLoser: 1 });
+  // Ikkalasi 12 da — keyingi yutqazgan matchni boy beradi
+  assert.deepEqual(m([12, 12], 0, 2), { score: [12, 14], loser: 1, matchLoser: 1 });
+
+  const orig = [12, 2];
+  m(orig, 1, 2);
+  assert.deepEqual(orig, [12, 2], 'kiruvchi massiv oʻzgarmaydi');
+});
