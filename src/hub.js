@@ -10,6 +10,9 @@ const MAX_ROOMS = 5000;
 const IDLE_MS = 2 * 60 * 60 * 1000; // 2 soat hech kim boʻlmasa stol oʻchadi
 const VOICE_MAX = 6;                // bitta stolda ovozli chatda bir vaqtda (har kim har kim bilan ulanadi)
 const MAX_SDP = 20000;
+const HALL_MAX = 20;                // guruh zalida koʻpi bilan shuncha stol
+const HALL_HIDE_EMPTY_MS = 10 * 60 * 1000; // hech kim qolmagan eski stol zalda koʻrsatilmaydi
+const CREATE_COOLDOWN_MS = 15000;   // bir kishi zaldan tez-tez stol ochmasin
 
 function cryptoRng() { return crypto.randomInt(0, 4294967296) / 4294967296; }
 
@@ -51,6 +54,11 @@ class Hub {
     this.iceServers = Array.isArray(cfg.iceServers) ? cfg.iceServers : [];
     this.voiceRelay = !!cfg.voiceRelay;
     this.voiceSeq = 0;
+    // Guruh zallari: kalit guruh raqamidan imzo bilan yasaladi — server qayta ishga tushsa ham havola ishlaydi
+    this.groups = new Map(); // key -> { key, chatId, title, rooms:Set, subs:Set, sig, timer }
+    this.hallSecret = crypto.createHash('sha256').update('bura-hall:' + (cfg.botToken || 'dev')).digest();
+    this.onHallChange = cfg.onHallChange || function () {};
+    this.onTableCreated = cfg.onTableCreated || function () {};
   }
 
   newId() {
@@ -64,10 +72,13 @@ class Hub {
     if (this.rooms.size >= MAX_ROOMS) this.gc(true);
     const id = this.newId();
     const self = this;
+    const g = opts.group ? this.ensureGroup(opts.chatId, opts.title) : null;
     const room = new Room({
       id: id,
       chatId: opts.chatId || null,
       title: opts.title || '',
+      groupKey: g ? g.key : null,
+      no: g ? this.freeTableNo(g) : 0,
       turnSeconds: this.cfg.turnSeconds,
       rng: cryptoRng,
       onChange: function (r) { self.broadcast(r); },
@@ -75,6 +86,7 @@ class Hub {
     });
     this.rooms.set(id, room);
     this.conns.set(id, new Set());
+    if (g) { g.rooms.add(id); this.hallChanged(g); }
     return room;
   }
 
@@ -82,6 +94,8 @@ class Hub {
     room.destroy();
     this.rooms.delete(room.id);
     this.conns.delete(room.id);
+    const g = room.groupKey ? this.groups.get(room.groupKey) : null;
+    if (g) { g.rooms.delete(room.id); this.hallChanged(g); }
     this.onRoomRemoved(room);
   }
 
@@ -105,6 +119,7 @@ class Hub {
         this.send(c, { t: 'state', room: room.snapshot(c.user.id), invite: invite, voice: this.voiceView(roster, c) });
       }
     }
+    if (room.groupKey) this.hallChanged(this.groups.get(room.groupKey));
     this.onRoomChange(room, 'change');
   }
 
@@ -135,6 +150,7 @@ class Hub {
   close() {
     for (const i of this.intervals || []) clearInterval(i);
     for (const r of this.rooms.values()) r.destroy();
+    for (const g of this.groups.values()) clearTimeout(g.timer);
     if (this.wss) this.wss.close();
   }
 
@@ -156,7 +172,7 @@ class Hub {
       if (!(m.t === 'rtc' ? this.allowRtc(c) : this.allow(c))) return;
       try { this.onMessage(c, m); } catch (e) { console.error('[ws] xato:', e); }
     });
-    ws.on('close', () => this.detach(c));
+    ws.on('close', () => { this.detach(c); this.leaveHall(c); });
     ws.on('error', () => {});
   }
 
@@ -177,7 +193,9 @@ class Hub {
     if (m.t === 'ping') return this.send(c, { t: 'pong' });
     if (m.t === 'hello') return this.hello(c, m);
     if (!c.user) return this.send(c, { t: 'error', msg: 'Avval tizimga kiring' });
-    if (m.t === 'create') return this.enter(c, this.createRoom({}));
+    if (m.t === 'create') return this.createFor(c);
+    if (m.t === 'hall') return this.toHall(c);
+    if (m.t === 'join') return this.join(c, m);
     if (!c.room) {
       if (m.t === 'voice_join') return this.send(c, { t: 'voice_end', reason: 'noroom' });
       if (VOICE_MSG[m.t]) return; // eski signal — jimgina tashlaymiz
@@ -204,19 +222,193 @@ class Hub {
     }
     if (!user) return this.send(c, { t: 'auth_error', msg: 'Ilovani Telegram orqali oching' });
     if (c.room) this.detach(c);
+    this.leaveHall(c);
     c.user = user;
     this.send(c, { t: 'welcome', me: { name: user.name } });
-    const roomId = String(m.room || startParam || '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 16);
-    const room = roomId ? this.rooms.get(roomId) : null;
+    const ref = String(m.room || startParam || '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 40);
+    if (ref[0] === 'g') { // guruh zali
+      const g = this.groupByKey(ref);
+      if (g) return this.enterHall(c, g);
+      return this.send(c, { t: 'home', missing: true });
+    }
+    const room = ref ? this.rooms.get(ref.slice(0, 16)) : null;
     if (room) this.enter(c, room);
-    else this.send(c, { t: 'home', missing: !!roomId });
+    else this.send(c, { t: 'home', missing: !!ref });
   }
 
   enter(c, room) {
     if (c.room) this.detach(c);
+    this.leaveHall(c);
     c.room = room;
     this.conns.get(room.id).add(c);
     room.connect(c.user); // holat hammaga yuboriladi
+  }
+
+  // ---------- guruh zali: guruhdagi barcha stollar ----------
+  groupKeyFor(chatId) {
+    if (chatId === 'dev') return 'gdev';
+    const n = Number(chatId);
+    const sig = crypto.createHmac('sha256', this.hallSecret).update('g:' + n).digest('hex').slice(0, 10);
+    return 'g' + (n < 0 ? 'n' : 'p') + Math.abs(n).toString(36) + 'x' + sig;
+  }
+
+  // Kalitdan guruh raqamini tiklash (imzo tekshiriladi — begona guruhni topib boʻlmaydi)
+  parseGroupKey(key) {
+    if (key === 'gdev') return this.cfg.devMode ? { chatId: 'dev' } : null;
+    const m = /^g([np])([0-9a-z]{1,12})x([0-9a-f]{10})$/.exec(key || '');
+    if (!m) return null;
+    const n = parseInt(m[2], 36) * (m[1] === 'n' ? -1 : 1);
+    if (!Number.isSafeInteger(n) || n === 0) return null;
+    const want = Buffer.from(this.groupKeyFor(n));
+    const got = Buffer.from(key);
+    return want.length === got.length && crypto.timingSafeEqual(want, got) ? { chatId: n } : null;
+  }
+
+  ensureGroup(chatId, title) {
+    const key = this.groupKeyFor(chatId);
+    let g = this.groups.get(key);
+    if (!g) {
+      g = { key: key, chatId: chatId, title: '', rooms: new Set(), subs: new Set(), sig: '', timer: null, lastCreate: new Map() };
+      this.groups.set(key, g);
+    }
+    if (title) g.title = String(title).slice(0, 64);
+    return g;
+  }
+
+  groupByKey(key) {
+    const g = this.groups.get(key);
+    if (g) return g;
+    const p = this.parseGroupKey(key);
+    return p ? this.ensureGroup(p.chatId) : null;
+  }
+
+  freeTableNo(g) {
+    const used = new Set();
+    for (const id of g.rooms) { const r = this.rooms.get(id); if (r) used.add(r.no); }
+    let n = 1;
+    while (used.has(n)) n++;
+    return n;
+  }
+
+  // Zalda koʻrinadigan stollar: odami bor yoki yangi ochilgan stollar
+  hallTables(g) {
+    const now = Date.now();
+    const list = [];
+    for (const id of g.rooms) {
+      const r = this.rooms.get(id);
+      if (!r || r.destroyed) continue;
+      const humans = r.seats.some((s) => s && !s.bot);
+      if (!humans && r.onlineCount() === 0 && now - r.createdAt > HALL_HIDE_EMPTY_MS) continue;
+      list.push(r);
+    }
+    list.sort((a, b) => a.no - b.no);
+    return list.slice(0, HALL_MAX);
+  }
+
+  tableView(r, uid) {
+    let voice = 0;
+    const set = this.conns.get(r.id);
+    if (set) for (const c of set) if (c.voice) voice++;
+    return {
+      id: r.id,
+      no: r.no,
+      phase: r.phase,
+      round: r.round,
+      score: r.score.slice(),
+      matchOver: r.matchOver,
+      seats: r.seats.map((s) => (s ? {
+        name: s.name, photo: s.photo || null, bot: !!s.bot, auto: !!s.auto,
+        online: !!s.bot || r.isOnline(s.id), you: uid != null && s.id === uid
+      } : null)),
+      spectators: r.spectators.size,
+      voice: voice,
+      mine: uid != null ? r.seatOf(uid) : -1
+    };
+  }
+
+  hallView(g, uid) {
+    return { key: g.key, title: g.title, tables: this.hallTables(g).map((r) => this.tableView(r, uid)) };
+  }
+
+  // Stollardan biri oʻzgardi: zalni koʻrib turganlarga va guruhdagi xabarga yetkazamiz (faqat koʻrinish oʻzgarsa)
+  hallChanged(g) {
+    if (!g) return;
+    const sig = JSON.stringify(this.hallTables(g).map((r) => this.tableView(r, null)));
+    if (sig === g.sig) return;
+    g.sig = sig;
+    if (!g.timer && g.subs.size) {
+      g.timer = setTimeout(() => {
+        g.timer = null;
+        for (const c of g.subs) this.send(c, { t: 'hall', hall: this.hallView(g, c.user.id) });
+      }, 250);
+    }
+    this.onHallChange(g);
+  }
+
+  enterHall(c, g) {
+    this.leaveRoomFor(c);
+    this.leaveHall(c);
+    c.hall = g;
+    g.subs.add(c);
+    this.send(c, { t: 'hall', hall: this.hallView(g, c.user.id) });
+  }
+
+  leaveHall(c) {
+    if (c.hall) { c.hall.subs.delete(c); c.hall = null; }
+  }
+
+  // Stoldan chiqib ketish: lobbida oʻrin darhol boʻshaydi, oʻyin paytida esa saqlanadi
+  leaveRoomFor(c) {
+    const r = c.room;
+    if (!r) return;
+    if (r.phase === 'lobby' && r.seatOf(c.user.id) >= 0) {
+      let others = 0;
+      for (const o of this.conns.get(r.id) || []) if (o !== c && o.user && o.user.id === c.user.id) others++;
+      if (!others) r.dispatch(c.user.id, { t: 'leave' });
+    }
+    this.detach(c);
+  }
+
+  toHall(c) {
+    const g = c.room && c.room.groupKey ? this.groups.get(c.room.groupKey) : c.hall;
+    if (!g) return this.send(c, { t: 'error', msg: 'Bu stol guruhga tegishli emas' });
+    this.enterHall(c, g);
+  }
+
+  // Zaldan stolga: kuzatish yoki aniq oʻringa oʻtirish
+  join(c, m) {
+    const id = String(m.room || '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 16);
+    const room = this.rooms.get(id);
+    if (!room || room.destroyed) {
+      this.send(c, { t: 'error', msg: 'Bu stol yopilgan' });
+      if (c.hall) this.send(c, { t: 'hall', hall: this.hallView(c.hall, c.user.id) });
+      return;
+    }
+    if (c.room !== room) {
+      this.leaveRoomFor(c);
+      this.enter(c, room);
+    }
+    if (Number.isInteger(m.seat) && m.seat >= 0 && m.seat < 4 && room.seatOf(c.user.id) !== m.seat) {
+      const err = room.dispatch(c.user.id, { t: 'sit', seat: m.seat });
+      if (err) this.send(c, { t: 'error', msg: err });
+    }
+  }
+
+  // Yangi stol: zaldan (yoki guruh stolidan) ochilsa — shu guruhga, aks holda alohida stol
+  createFor(c) {
+    const g = c.hall || (c.room && c.room.groupKey ? this.groups.get(c.room.groupKey) : null);
+    if (!g) {
+      this.leaveRoomFor(c);
+      return this.enter(c, this.createRoom({}));
+    }
+    const now = Date.now();
+    if (now - (g.lastCreate.get(c.user.id) || 0) < CREATE_COOLDOWN_MS) return this.send(c, { t: 'error', msg: 'Biroz kuting — stol hozirgina ochildi' });
+    if (this.hallTables(g).length >= HALL_MAX) return this.send(c, { t: 'error', msg: 'Zalda stollar toʻla' });
+    g.lastCreate.set(c.user.id, now);
+    const room = this.createRoom({ group: true, chatId: g.chatId, title: g.title });
+    this.leaveRoomFor(c);
+    this.enter(c, room);
+    this.onTableCreated(room, c.user);
   }
 
   detach(c) {
@@ -248,6 +440,7 @@ class Hub {
     if (!set) return;
     const roster = this.voiceRoster(room);
     for (const c of set) this.send(c, Object.assign({ t: 'voice' }, this.voiceView(roster, c)));
+    if (room.groupKey) this.hallChanged(this.groups.get(room.groupKey)); // zalda 🎙 soni
   }
 
   voiceJoin(c, m) {

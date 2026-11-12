@@ -57,7 +57,9 @@ const hub = new Hub({
   voiceRelay: cfg.voiceRelay,
   inviteLink: function (id) { return bot ? bot.appLink(id) : (cfg.publicUrl || '') + '/?room=' + id; },
   onRoomChange: function (room) { if (bot) bot.onRoomChange(room); },
-  onRoomRemoved: function (room) { if (bot) bot.onRoomRemoved(room); }
+  onRoomRemoved: function (room) { if (bot) bot.onRoomRemoved(room); },
+  onHallChange: function (group) { if (bot) bot.onHallChange(group); },
+  onTableCreated: function (room, user) { if (bot) bot.onTableCreated(room, user); }
 });
 
 function serveFile(req, res, file) {

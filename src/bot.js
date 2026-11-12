@@ -7,7 +7,7 @@ const { MATCH_LOSE, MATCH_EDGE } = require('./engine');
 const ALLOWED_UPDATES = ['message', 'my_chat_member'];
 
 const COMMANDS = [
-  { command: 'bura', description: 'Yangi Bura stoli ochish' },
+  { command: 'bura', description: 'Oʻyin zali: stol tanlash yoki yangi stol' },
   { command: 'qoidalar', description: 'Oʻyin qoidalari' },
   { command: 'help', description: 'Yordam' }
 ];
@@ -35,10 +35,10 @@ const RULES = [
 const HELP = [
   '🃏 <b>Bura boti</b>',
   '',
-  '/bura — yangi oʻyin stoli ochish',
+  '/bura — oʻyin zali: guruhdagi barcha stollar',
   '/qoidalar — oʻyin qoidalari',
   '',
-  'Guruhda /bura yozing, soʻng 4 kishi «🎮 Oʻyinga kirish» tugmasini bosadi — oʻyin oʻzi boshlanadi. 2×2 jamoa boʻlib oʻynaladi: 1 va 3-oʻrin, 2 va 4-oʻrin.',
+  'Guruhda /bura yozing va «🎮 Oʻyin zaliga kirish» tugmasini bosing. Zalda guruhdagi barcha stollar va kim qayerda oʻtirgani koʻrinadi: boʻsh oʻringa oʻtirasiz, oʻyinni kuzatasiz yoki yangi stol ochasiz. Stolda 4 kishi yigʻilsa, oʻyin oʻzi boshlanadi. 2×2 jamoa boʻlib oʻynaladi: 1 va 3-oʻrin, 2 va 4-oʻrin.',
   'Odam kam boʻlsa, stol egasi boʻsh oʻrinlarga bot qoʻshadi.',
   '',
   '🎙 Stolda ovozli chat bor: oʻyin ichidagi mikrofon tugmasini bosing — stoldagilar bilan gaplashasiz.'
@@ -138,8 +138,101 @@ function createBot(opts) {
     tables.set(room.id, { chatId: chat.id, messageId: sent.message_id, isPrivate: isPrivate, last: text, timer: null, wait: 0 });
   }
 
-  // Stol holati oʻzgarganda guruhdagi xabarni yangilash (tez-tez emas)
+  // ---------- guruh zali: bitta xabarda guruhdagi barcha stollar ----------
+  const halls = new Map(); // groupKey -> { chatId, messageId, thread, last, timer, postedAt }
+
+  function seatLabel(s) {
+    if (!s) return '<i>boʻsh</i>';
+    return (s.bot ? '🤖 ' : '') + esc(s.name) + (s.auto ? ' <i>(bot oʻynayapti)</i>' : '');
+  }
+  function tableLine(r) {
+    const n = r.seats.filter(Boolean).length;
+    let st;
+    if (r.phase === 'lobby') st = n >= 4 ? '⏳ boshlanmoqda' : '⏳ odam kutilmoqda (' + n + '/4)';
+    else st = (r.phase === 'roundEnd' ? '⏸ ' : '🎲 ') + r.round + '-raund · hisob ' + r.score[0] + ':' + r.score[1];
+    const extra = r.spectators.size ? ' · 👀 ' + r.spectators.size : '';
+    return '<b>' + r.no + '-stol</b> · ' + st + extra + '\n' +
+      '1-jamoa: ' + [r.seats[0], r.seats[2]].map(seatLabel).join(', ') + '\n' +
+      '2-jamoa: ' + [r.seats[1], r.seats[3]].map(seatLabel).join(', ');
+  }
+  function hallText(g, note) {
+    const list = hub.hallTables(g);
+    const L = ['🃏 <b>Bura — oʻyin zali</b>'];
+    if (note) L.push(note);
+    L.push('');
+    if (!list.length) L.push('Hozircha stol yoʻq. Tugmani bosing va birinchi stolni oching.', '');
+    list.slice(0, 12).forEach(function (r) { L.push(tableLine(r), ''); });
+    if (list.length > 12) L.push('…va yana ' + (list.length - 12) + ' ta stol', '');
+    L.push('👉 Tugmani bosing: istalgan stolga oʻtirasiz, kuzatasiz yoki yangi stol ochasiz.');
+    return L.join('\n');
+  }
+  function hallKeyboard(g) {
+    return { inline_keyboard: [[{ text: '🎮 Oʻyin zaliga kirish', url: bot.appLink(g.key) }]] };
+  }
+
+  // Zal xabarini guruhning pastiga qayta yuborish (eskisi oʻchiriladi — guruhda bitta xabar qoladi)
+  async function postHall(g, thread, note) {
+    let h = halls.get(g.key);
+    if (!h) { h = { chatId: g.chatId, messageId: 0, thread: null, last: '', timer: null, postedAt: 0 }; halls.set(g.key, h); }
+    if (thread) h.thread = thread;
+    const text = hallText(g, note);
+    const extra = { reply_markup: hallKeyboard(g) };
+    if (h.thread) extra.message_thread_id = h.thread;
+    const old = h.messageId;
+    const sent = await send(g.chatId, text, extra);
+    h.messageId = sent.message_id;
+    h.last = text;
+    h.postedAt = Date.now();
+    if (old && old !== h.messageId) api.call('deleteMessage', { chat_id: g.chatId, message_id: old }).catch(function () {});
+  }
+
+  async function groupBura(msg) {
+    const chat = msg.chat;
+    const g = hub.ensureGroup(chat.id, chat.title || '');
+    // Boʻsh oʻrinli kutayotgan stol boʻlmasa — yangisini ochamiz
+    const waiting = hub.hallTables(g).some(function (r) { return r.phase === 'lobby' && r.seats.some(function (s) { return !s; }); });
+    if (!waiting) hub.createRoom({ group: true, chatId: chat.id, title: chat.title || '' });
+    const thread = msg.message_thread_id && msg.is_topic_message ? msg.message_thread_id : null;
+    await postHall(g, thread);
+  }
+
+  // Zal oʻzgardi — guruhdagi xabarni yangilaymiz (tez-tez emas)
+  bot.onHallChange = function (g) {
+    const h = halls.get(g.key);
+    if (!h || !h.messageId || h.timer) return;
+    h.timer = setTimeout(async function () {
+      h.timer = null;
+      const text = hallText(g);
+      if (text === h.last) return;
+      try {
+        await api.call('editMessageText', {
+          chat_id: h.chatId, message_id: h.messageId, text: text, parse_mode: 'HTML',
+          disable_web_page_preview: true, reply_markup: hallKeyboard(g)
+        });
+        h.last = text;
+      } catch (e) {
+        if (/not modified/i.test(e.message)) { h.last = text; return; }
+        if (/not found|can't be edited/i.test(e.message)) { h.messageId = 0; return; }
+        if (e.retryAfter) { await sleep(e.retryAfter * 1000); bot.onHallChange(g); return; }
+        console.warn('[bot] zal xabarini yangilab boʻlmadi:', e.message);
+      }
+    }, 2500);
+  };
+
+  // Ilovadan yangi stol ochildi — guruhga xabar beramiz (daqiqada bir martadan koʻp emas)
+  bot.onTableCreated = function (room, user) {
+    if (!me || !room.groupKey || room.chatId === 'dev') return;
+    const g = hub.groups.get(room.groupKey);
+    if (!g) return;
+    const h = halls.get(g.key);
+    if (h && h.messageId && Date.now() - h.postedAt < 60000) return bot.onHallChange(g);
+    postHall(g, null, '🆕 ' + esc(user.name) + ' ' + room.no + '-stolni ochdi — qoʻshiling!')
+      .catch(function (e) { console.warn('[bot] zal xabari:', e.message); });
+  };
+
+  // Stol holati oʻzgarganda shaxsiy chatdagi xabarni yangilash (guruh stollari zal xabarida)
   bot.onRoomChange = function (room) {
+    if (room.groupKey) return;
     const t = tables.get(room.id);
     if (!t || t.timer) return;
     t.timer = setTimeout(async function () {
@@ -179,7 +272,7 @@ function createBot(opts) {
     const thread = msg.message_thread_id && msg.is_topic_message ? { message_thread_id: msg.message_thread_id } : {};
 
     if (cmd === 'start' && isPrivate) return welcome(msg);
-    if (cmd === 'bura' || cmd === 'start' || cmd === 'play' || cmd === 'yangi') return newTable(msg);
+    if (cmd === 'bura' || cmd === 'start' || cmd === 'play' || cmd === 'yangi') return isPrivate ? newTable(msg) : groupBura(msg);
     if (cmd === 'qoidalar' || cmd === 'rules') return send(msg.chat.id, RULES, thread);
     if (cmd === 'help' || cmd === 'yordam') return send(msg.chat.id, HELP, thread);
   }
@@ -194,7 +287,7 @@ function createBot(opts) {
       '',
       '1. Meni guruhga qoʻshing',
       '2. Guruhda /bura yozing',
-      '3. «🎮 Oʻyinga kirish» tugmasini bosing',
+      '3. «🎮 Oʻyin zaliga kirish» tugmasini bosing va stol tanlang',
       '',
       'Yoki shu yerda /bura yozing va havolani doʻstlaringizga yuboring.'
     ].join('\n');
@@ -206,7 +299,7 @@ function createBot(opts) {
     const was = cm.old_chat_member && cm.old_chat_member.status;
     const now = cm.new_chat_member.status;
     if ((now === 'member' || now === 'administrator') && (was === 'left' || was === 'kicked') && cm.chat.type !== 'channel') {
-      return send(cm.chat.id, 'Salom! 🃏 Men Bura oʻyini botiman.\nYangi stol ochish uchun /bura yozing — 4 kishi «Oʻyinga kirish» tugmasini bossa, oʻyin boshlanadi.');
+      return send(cm.chat.id, 'Salom! 🃏 Men Bura oʻyini botiman.\nOʻyin zalini ochish uchun /bura yozing — tugmani bosib, stol tanlaysiz. 4 kishi yigʻilsa, oʻyin boshlanadi.');
     }
   }
 
@@ -249,7 +342,7 @@ function createBot(opts) {
     });
   };
 
-  bot._test = { tableText: tableText, onUpdate: onUpdate, setMe: function (m) { me = m; } };
+  bot._test = { tableText: tableText, hallText: hallText, halls: halls, onUpdate: onUpdate, setMe: function (m) { me = m; } };
   return bot;
 }
 

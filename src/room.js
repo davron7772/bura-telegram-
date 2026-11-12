@@ -17,6 +17,8 @@
     this.id = o.id || 'demo';
     this.chatId = o.chatId || null;
     this.title = o.title || '';
+    this.groupKey = o.groupKey || null; // guruh zali (bir guruhdagi barcha stollar)
+    this.no = o.no || 0;                // zaldagi stol raqami: 1-stol, 2-stol…
     this.now = o.now || function () { return Date.now(); };
     this.setTimer = o.setTimeout || function (f, ms) { return setTimeout(f, ms); };
     this.clearTimer = o.clearTimeout || function (h) { clearTimeout(h); };
@@ -51,6 +53,7 @@
     this.deadlineTotal = 0;
     this.botSeq = 0;
     this.lastActive = this.now();
+    this.createdAt = this.now();
     this.destroyed = false;
   }
 
@@ -447,6 +450,8 @@
     }
     return {
       id: this.id,
+      group: this.groupKey,
+      no: this.no,
       phase: this.phase,
       round: this.round,
       mySeat: mySeat,

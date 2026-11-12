@@ -9,6 +9,7 @@ Guruhda `/bura` deb yoziladi. Bot oʻyin stolini ochib, «🎮 Oʻyinga kirish»
 - **Telegram bot** — `/bura` buyrugʻi bilan stol ochadi. Guruhdagi xabar oʻyin davomida yangilanib turadi: jamoalar, raund, hisob.
 - **Mini App** — telefonga moslashtirilgan oʻyin stoli (Telegram ichida ochiladi).
 - **Ovozli chat** — stoldagilar Mini App ichida bir-biri bilan gaplashadi; kim gapirayotgani avatarida koʻrinib turadi.
+- **Oʻyin zali** — guruhdagi barcha stollar bitta ekranda (poker zali kabi): kim qaysi stolda oʻtirgani, hisob, boʻsh oʻrinlar. Keyin kelgan kishi stol tanlaydi, kuzatadi yoki yangi stol ochadi.
 - **Server** — 4 kishini real vaqtda bogʻlaydi va qoidalarni tekshiradi. Kartalar serverda saqlanadi, shuning uchun hech kim boshqaning kartasini koʻra olmaydi.
 - **Kompyuter oʻyinchilari** — odam yetmasa, stol egasi boʻsh oʻrinlarga bot qoʻshadi. Kimdir chiqib ketsa yoki vaqtida yurmasa, uning oʻrniga avtomatik yuriladi.
 - **Hisob** — raundda yutqazgan jamoaga 2, 4 yoki 6 ball yoziladi; 14 ballga yetgan jamoa matchni yutqazadi, aynan 12 ballda esa shans beriladi.
@@ -55,10 +56,15 @@ HTTPS uchun oldiga Caddy yoki Nginx qoʻying (domen kerak).
 ## 4-qadam. Oʻynash
 
 1. Botni guruhga qoʻshing.
-2. Guruhda `/bura` yozing.
-3. 4 kishi «🎮 Oʻyinga kirish» tugmasini bosadi — oʻyin oʻzi boshlanadi.
-   Jamoalar: 1 va 3-oʻrin, 2 va 4-oʻrin (sherik roʻparada). Lobbida boʻsh oʻrindagi «Oʻtirish» tugmasi bilan jamoani tanlash mumkin.
-   Odam kam boʻlsa, stol egasi (birinchi kirgan kishi) boʻsh oʻrinlarga bot qoʻshadi.
+2. Guruhda `/bura` yozing — bot guruhga **oʻyin zali** xabarini yuboradi.
+3. «🎮 Oʻyin zaliga kirish» tugmasini bosing. Zalda guruhdagi barcha stollar koʻrinadi:
+   - boʻsh oʻrinni (+) bossangiz, oʻsha jamoaga oʻtirasiz; 4 kishi yigʻilsa, oʻyin oʻzi boshlanadi;
+   - oʻyin ketayotgan stolni kuzatish mumkin; raund tugagach, bot oʻrniga oʻtirasiz;
+   - «Yangi stol ochish» — shu guruhda yana bir stol. Bot guruhga «… 2-stolni ochdi» deb xabar beradi.
+   Jamoalar: 1 va 3-oʻrin, 2 va 4-oʻrin (sherik roʻparada). Odam kam boʻlsa, stol egasi boʻsh oʻrinlarga bot qoʻshadi.
+4. Stoldan zalga qaytish: lobbidagi «← Barcha stollar», menyudagi «Barcha stollar (zal)» yoki Telegram'ning «Orqaga» tugmasi.
+
+Guruhda bitta zal xabari turadi va stollar oʻzgarganda yangilanadi; `/bura` uni chat pastiga qayta chiqaradi (eskisi oʻchadi). Kutayotgan boʻsh stol boʻlmasa, `/bura` yangi stol ham ochadi.
 
 Bot bilan shaxsiy chatda ham `/bura` yozish mumkin — bot havolani doʻstlaringizga yuborish tugmasini beradi.
 
@@ -123,7 +129,7 @@ Qoidalar `src/engine.js` faylida jamlangan; boshqa mahalliy variant kerak boʻls
 
 - Stollar server xotirasida saqlanadi. Server qayta ishga tushsa, ochiq oʻyinlar va match hisobi yangidan boshlanadi.
 - Render bepul tarifida server 15 daqiqa ishlatilmasa «uxlaydi». Shundan keyingi birinchi `/bura` ga javob 30–60 soniya kechikishi mumkin.
-- Avtomatik testlar: `npm test` (qoidalar, yopiq koʻzir, jamoa hisobi, stol, initData tekshiruvi, ovozli chat signallari, 4 kishilik toʻliq oʻyin).
+- Avtomatik testlar: `npm test` (qoidalar, yopiq koʻzir, jamoa hisobi, stol, oʻyin zali, initData tekshiruvi, ovozli chat signallari, 4 kishilik toʻliq oʻyin).
 - Demo: `npm run build:demo` → `dist/bura-demo.html`. Kompyuter oʻyinchilariga qarshi, internetsiz ishlaydi.
 
 ## Fayllar
@@ -132,7 +138,7 @@ Qoidalar `src/engine.js` faylida jamlangan; boshqa mahalliy variant kerak boʻls
 server.js          HTTP server, WebSocket, botni ishga tushirish
 src/engine.js      Qoidalar va kompyuter oʻyinchisi (server va brauzer uchun umumiy)
 src/room.js        Stol: 4 oʻrin (2×2), navbat, taymer, match hisobi
-src/hub.js         WebSocket ulanishlari va ovozli chat signallari
+src/hub.js         WebSocket ulanishlari, guruh zali va ovozli chat signallari
 src/ice.js         Ovozli chat uchun STUN/TURN sozlamalari
 src/bot.js         Telegram buyruqlari va guruhdagi stol xabari
 src/auth.js        Telegram initData tekshiruvi
