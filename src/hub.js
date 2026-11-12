@@ -5,6 +5,7 @@ const { WebSocketServer } = require('ws');
 const { Room } = require('./room');
 const { validateInitData } = require('./auth');
 const { displayName, safePhoto } = require('./util');
+const { hasTurn } = require('./ice');
 
 const MAX_ROOMS = 5000;
 const IDLE_MS = 2 * 60 * 60 * 1000; // 2 soat hech kim boʻlmasa stol oʻchadi
@@ -13,6 +14,13 @@ const MAX_SDP = 20000;
 const HALL_MAX = 20;                // guruh zalida koʻpi bilan shuncha stol
 const HALL_HIDE_EMPTY_MS = 10 * 60 * 1000; // hech kim qolmagan eski stol zalda koʻrsatilmaydi
 const CREATE_COOLDOWN_MS = 15000;   // bir kishi zaldan tez-tez stol ochmasin
+// Server orqali ovoz (toʻgʻridan-toʻgʻri WebRTC ulanmagan juftliklar uchun)
+const FWD_TAG = 0xA1;               // kadrning birinchi bayti
+const FWD_MIN = 8;
+const FWD_MAX = 900;                // 40 ms 16 kHz ADPCM ≈ 327 bayt
+const FWD_BACKLOG = 128 * 1024;     // qabul qiluvchi sekin boʻlsa — kadr tashlab yuboriladi (ovoz kechikmasin)
+const VID_RE = /^[0-9a-f]{10}$/;
+const LINK_NAME = { ok: 'toʻgʻridan', fwd: 'server orqali', wait: 'ulanmoqda', fail: 'ulanib boʻlmadi' };
 
 function cryptoRng() { return crypto.randomInt(0, 4294967296) / 4294967296; }
 
@@ -41,7 +49,7 @@ function cleanSignal(d) {
   return null;
 }
 
-const VOICE_MSG = { rtc: 1, voice_join: 1, voice_leave: 1, voice_set: 1 };
+const VOICE_MSG = { rtc: 1, voice_join: 1, voice_leave: 1, voice_set: 1, voice_fwd: 1, voice_stat: 1 };
 
 class Hub {
   constructor(cfg) {
@@ -52,7 +60,9 @@ class Hub {
     this.onRoomRemoved = cfg.onRoomRemoved || function () {};
     this.inviteLink = cfg.inviteLink || function (id) { return '/?room=' + id; };
     this.iceServers = Array.isArray(cfg.iceServers) ? cfg.iceServers : [];
-    this.voiceRelay = !!cfg.voiceRelay;
+    this.turn = cfg.turn || null;          // TURN kalitlari API orqali (Cloudflare / Metered)
+    this.voiceRelay = !!cfg.voiceRelay;    // faqat TURN orqali (TURN boʻlsa)
+    this.voiceFwd = cfg.voiceFwd !== false; // ulanmagan juftliklar ovozini server uzatadi
     this.voiceSeq = 0;
     // Guruh zallari: kalit guruh raqamidan imzo bilan yasaladi — server qayta ishga tushsa ham havola ishlaydi
     this.groups = new Map(); // key -> { key, chatId, title, rooms:Set, subs:Set, sig, timer }
@@ -160,12 +170,14 @@ class Hub {
       ws: ws, user: null, room: null,
       vid: crypto.randomBytes(5).toString('hex'), // ovozli chatdagi ichki raqam (har ulanishga yangi)
       voice: null,
-      raw: 120, rawLast: now, tokens: 30, last: now, rtc: 120, rtcLast: now
+      fwd: null, // server orqali ovoz yuboriladigan qatnashchilar (vid)
+      raw: 120, rawLast: now, tokens: 30, last: now, rtc: 120, rtcLast: now, aud: 40, audLast: now
     };
     ws.isAlive = true;
     ws.on('pong', () => { ws.isAlive = true; });
     ws.on('message', (raw, isBinary) => {
-      if (isBinary || !this.allowRaw(c)) return;
+      if (isBinary) return this.onAudio(c, raw);
+      if (!this.allowRaw(c)) return;
       let m;
       try { m = JSON.parse(raw); } catch (_) { return; }
       if (!m || typeof m !== 'object') return;
@@ -188,12 +200,13 @@ class Hub {
   allowRaw(c) { return this.bucket(c, 'raw', 'rawLast', 120, 0.05); }
   allow(c) { return this.bucket(c, 'tokens', 'last', 30, 0.01); }
   allowRtc(c) { return this.bucket(c, 'rtc', 'rtcLast', 120, 0.03); }
+  allowAudio(c) { return this.bucket(c, 'aud', 'audLast', 40, 0.035); } // ~35 kadr/s (odatda 25)
 
   onMessage(c, m) {
     if (m.t === 'ping') return this.send(c, { t: 'pong' });
     if (m.t === 'hello') return this.hello(c, m);
     if (!c.user) return this.send(c, { t: 'error', msg: 'Avval tizimga kiring' });
-    if (m.t === 'create') return this.createFor(c);
+    if (m.t === 'create') return this.createFor(c, m);
     if (m.t === 'hall') return this.toHall(c);
     if (m.t === 'join') return this.join(c, m);
     if (!c.room) {
@@ -206,6 +219,8 @@ class Hub {
       case 'voice_join': return this.voiceJoin(c, m);
       case 'voice_leave': return this.voiceLeave(c);
       case 'voice_set': return this.voiceSet(c, m);
+      case 'voice_fwd': return this.voiceFwdTo(c, m);
+      case 'voice_stat': return this.voiceStat(c, m);
     }
     const err = c.room.dispatch(c.user.id, m);
     if (err) this.send(c, { t: 'error', msg: err });
@@ -231,17 +246,20 @@ class Hub {
       if (g) return this.enterHall(c, g);
       return this.send(c, { t: 'home', missing: true });
     }
-    const room = ref ? this.rooms.get(ref.slice(0, 16)) : null;
-    if (room) this.enter(c, room);
+    // Aniq oʻringa taklif: <stol>s<oʻrin> (masalan, sherik oʻrniga)
+    const seatRef = /^([0-9a-f]{8})s([0-9]*)$/.exec(ref);
+    const room = ref ? this.rooms.get(seatRef ? seatRef[1] : ref.slice(0, 16)) : null;
+    const seat = seatRef && /^[0-3]$/.test(seatRef[2]) ? Number(seatRef[2]) : -1;
+    if (room) this.enter(c, room, seat);
     else this.send(c, { t: 'home', missing: !!ref });
   }
 
-  enter(c, room) {
+  enter(c, room, seat) {
     if (c.room) this.detach(c);
     this.leaveHall(c);
     c.room = room;
     this.conns.get(room.id).add(c);
-    room.connect(c.user); // holat hammaga yuboriladi
+    room.connect(c.user, seat); // holat hammaga yuboriladi
   }
 
   // ---------- guruh zali: guruhdagi barcha stollar ----------
@@ -394,12 +412,17 @@ class Hub {
     }
   }
 
-  // Yangi stol: zaldan (yoki guruh stolidan) ochilsa — shu guruhga, aks holda alohida stol
-  createFor(c) {
+  // Yangi stol: zaldan (yoki guruh stolidan) ochilsa — shu guruhga, aks holda alohida stol.
+  // bots: true — boʻsh oʻrinlarga darhol botlar oʻtiradi (oʻyin shu zahoti boshlanadi), aks holda stol botsiz ochiladi
+  createFor(c, m) {
+    const bots = !!(m && m.bots === true);
     const g = c.hall || (c.room && c.room.groupKey ? this.groups.get(c.room.groupKey) : null);
     if (!g) {
       this.leaveRoomFor(c);
-      return this.enter(c, this.createRoom({}));
+      const solo = this.createRoom({});
+      this.enter(c, solo);
+      if (bots) solo.fillBots(c.user.id);
+      return;
     }
     const now = Date.now();
     if (now - (g.lastCreate.get(c.user.id) || 0) < CREATE_COOLDOWN_MS) return this.send(c, { t: 'error', msg: 'Biroz kuting — stol hozirgina ochildi' });
@@ -408,7 +431,8 @@ class Hub {
     const room = this.createRoom({ group: true, chatId: g.chatId, title: g.title });
     this.leaveRoomFor(c);
     this.enter(c, room);
-    this.onTableCreated(room, c.user);
+    if (bots) room.fillBots(c.user.id); // stol toʻla — guruhni chaqirishning keragi yoʻq
+    else this.onTableCreated(room, c.user);
   }
 
   detach(c) {
@@ -416,6 +440,7 @@ class Hub {
     if (!room) return;
     const hadVoice = !!c.voice;
     c.voice = null;
+    c.fwd = null;
     c.room = null;
     const set = this.conns.get(room.id);
     if (set) set.delete(c);
@@ -449,6 +474,7 @@ class Hub {
     for (const o of set) {
       if (o !== c && o.voice && o.user.id === c.user.id) {
         o.voice = null;
+        o.fwd = null;
         this.send(o, { t: 'voice_end', reason: 'elsewhere' });
       }
     }
@@ -462,14 +488,24 @@ class Hub {
       for (const o of set) if (o.voice) n++;
       if (n >= VOICE_MAX) return this.send(c, { t: 'voice_end', reason: 'full', max: VOICE_MAX });
       c.voice = { mic: mic, muted: muted, seq: ++this.voiceSeq };
+      c.fwd = null;
+      c.statLine = '';
     }
-    this.send(c, { t: 'voice_cfg', ice: this.iceServers, relay: this.voiceRelay, max: VOICE_MAX });
+    const ice = this.iceFor();
+    this.send(c, { t: 'voice_cfg', ice: ice, relay: this.voiceRelay && hasTurn(ice), fwd: this.voiceFwd, max: VOICE_MAX });
     this.broadcastVoice(c.room);
+  }
+
+  // STUN (+ sozlangan boʻlsa TURN) roʻyxati; TURN kalitlari API orqali olinsa — eng yangisi qoʻshiladi
+  iceFor() {
+    const extra = this.turn ? this.turn.current() : null;
+    return extra && extra.length ? this.iceServers.concat(extra).slice(0, 10) : this.iceServers;
   }
 
   voiceLeave(c) {
     if (!c.voice) return;
     c.voice = null;
+    c.fwd = null;
     this.broadcastVoice(c.room);
   }
 
@@ -478,6 +514,55 @@ class Hub {
     if (typeof m.mic === 'boolean') c.voice.mic = m.mic;
     c.voice.muted = c.voice.mic && !!m.muted;
     this.broadcastVoice(c.room);
+  }
+
+  // Mijoz kimga server orqali ovoz yuborishini aytadi (WebRTC ulanmagan qatnashchilar)
+  voiceFwdTo(c, m) {
+    if (!c.voice || !this.voiceFwd) return;
+    const to = Array.isArray(m.to) ? m.to.filter((v) => typeof v === 'string' && VID_RE.test(v) && v !== c.vid).slice(0, VOICE_MAX) : [];
+    c.fwd = to.length ? new Set(to) : null;
+  }
+
+  // Ovoz kadri: [0xA1][tartib raqami 2 bayt][ADPCM] → qabul qiluvchilarga [0xA1][yuboruvchi vid 5 bayt][tartib raqami][ADPCM]
+  onAudio(c, buf) {
+    if (!c.room || !c.voice || !c.fwd || !c.voice.mic || c.voice.muted || !this.voiceFwd) return;
+    if (!Buffer.isBuffer(buf) || buf.length < FWD_MIN || buf.length > FWD_MAX || buf[0] !== FWD_TAG) return;
+    if (!this.allowAudio(c)) return;
+    let out = null;
+    for (const o of this.conns.get(c.room.id) || []) {
+      if (o === c || !o.voice || !c.fwd.has(o.vid) || o.ws.readyState !== 1 || o.ws.bufferedAmount > FWD_BACKLOG) continue;
+      if (!out) {
+        out = Buffer.allocUnsafe(buf.length + 5);
+        out[0] = FWD_TAG;
+        out.write(c.vid, 1, 5, 'hex');
+        buf.copy(out, 6, 1);
+      }
+      try { o.ws.send(out, { binary: true }); } catch (_) { /* yopilgan */ }
+    }
+  }
+
+  // Diagnostika: kim kim bilan qanday ulangan — Render loglarida koʻrinadi (ismlarsiz, faqat oʻrin raqami)
+  voiceStat(c, m) {
+    if (!c.voice || !Array.isArray(m.peers)) return;
+    const set = this.conns.get(c.room.id) || new Set();
+    const parts = [];
+    for (const x of m.peers.slice(0, VOICE_MAX)) {
+      if (!x || typeof x.v !== 'string' || !LINK_NAME[x.st]) continue;
+      let o = null;
+      for (const k of set) if (k.vid === x.v && k.voice) { o = k; break; }
+      if (!o) continue;
+      const path = typeof x.path === 'string' && /^[a-z]{1,6}\/[a-z]{1,6}$/.test(x.path) ? ' (' + x.path + ')' : '';
+      parts.push(this.seatLabel(c.room, o) + ': ' + LINK_NAME[x.st] + path);
+    }
+    const line = parts.join(', ');
+    if (!line || line === c.statLine) return;
+    c.statLine = line;
+    console.log('[ovoz] stol ' + c.room.id + ' · ' + this.seatLabel(c.room, c) + ' → ' + line);
+  }
+
+  seatLabel(room, c) {
+    const s = room.seatOf(c.user.id);
+    return s >= 0 ? (s + 1) + '-oʻrin' : 'tomoshabin';
   }
 
   relay(c, m) {
@@ -494,4 +579,4 @@ class Hub {
   }
 }
 
-module.exports = { Hub, cleanSignal, VOICE_MAX };
+module.exports = { Hub, cleanSignal, VOICE_MAX, FWD_TAG };

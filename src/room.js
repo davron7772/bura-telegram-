@@ -99,7 +99,8 @@
   };
 
   // ---------- ulanish ----------
-  P.connect = function (user) {
+  // pref — taklif havolasidagi oʻrin (boʻsh boʻlsa, oʻsha joyga oʻtiradi)
+  P.connect = function (user, pref) {
     this.online.set(user.id, (this.online.get(user.id) || 0) + 1);
     const i = this.seatOf(user.id);
     if (i >= 0) {
@@ -110,7 +111,8 @@
       if (s.auto) { s.auto = false; this.fixHost(); }
       this.spectators.delete(user.id);
     } else if (this.phase === 'lobby' && this.firstFree() >= 0) {
-      this.addHuman(user, this.firstFree());
+      const want = Number.isInteger(pref) && pref >= 0 && pref < SEATS && !this.seats[pref] ? pref : this.firstFree();
+      this.addHuman(user, want);
     } else {
       this.spectators.set(user.id, user);
     }

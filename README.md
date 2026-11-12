@@ -60,8 +60,9 @@ HTTPS uchun oldiga Caddy yoki Nginx qoʻying (domen kerak).
 3. «🎮 Oʻyin zaliga kirish» tugmasini bosing. Zalda guruhdagi barcha stollar koʻrinadi:
    - boʻsh oʻrinni (+) bossangiz, oʻsha jamoaga oʻtirasiz; 4 kishi yigʻilsa, oʻyin oʻzi boshlanadi;
    - oʻyin ketayotgan stolni kuzatish mumkin; raund tugagach, bot oʻrniga oʻtirasiz;
-   - «Yangi stol ochish» — shu guruhda yana bir stol. Bot guruhga «… 2-stolni ochdi» deb xabar beradi.
-   Jamoalar: 1 va 3-oʻrin, 2 va 4-oʻrin (sherik roʻparada). Odam kam boʻlsa, stol egasi boʻsh oʻrinlarga bot qoʻshadi.
+   - «Yangi stol ochish» — tanlov chiqadi: **«Doʻstlar bilan»** (stol botsiz ochiladi, bot guruhga «… 2-stolni ochdi» deb xabar beradi) yoki **«Botlar bilan»** (boʻsh oʻrinlarga darhol botlar oʻtiradi).
+   Jamoalar: 1 va 3-oʻrin, 2 va 4-oʻrin (sherik roʻparada).
+   Lobbida har bir boʻsh oʻrin yonida: **«Taklif qilish»** — doʻstingizga aynan shu oʻringa havola (sherik yoki raqib oʻrni), **«Bot»** — stol egasi shu oʻringa bot qoʻyadi, **«Oʻtirish»** — oʻzingiz oʻtirasiz. Oʻyin faqat 4 oʻrin toʻlganda boshlanadi.
 4. Stoldan zalga qaytish: lobbidagi «← Barcha stollar», menyudagi «Barcha stollar (zal)» yoki Telegram'ning «Orqaga» tugmasi.
 
 Guruhda bitta zal xabari turadi va stollar oʻzgarganda yangilanadi; `/bura` uni chat pastiga qayta chiqaradi (eskisi oʻchadi). Kutayotgan boʻsh stol boʻlmasa, `/bura` yangi stol ham ochadi.
@@ -77,13 +78,17 @@ Bot bilan shaxsiy chatda ham `/bura` yozish mumkin — bot havolani doʻstlaring
 - Menyuda istalgan kishining ovozini faqat oʻzingiz uchun oʻchirib qoʻyish mumkin.
 - Bir stolda bir vaqtda 6 kishigacha (4 oʻyinchi va 2 tomoshabin).
 
-Ovoz telefonlar oʻrtasida toʻgʻridan-toʻgʻri (WebRTC) uzatiladi. Server faqat ulanishga yordam beradi: ovoz serverdan oʻtmaydi va yozib olinmaydi.
+- Ovozli chatga qoʻshilmagan oʻyinchilar menyuda «ovozli chatga qoʻshilmagan» deb koʻrinadi; kimdir qoʻshilsa, qolganlarga eslatma chiqadi va mikrofon tugmasi yonib-oʻchadi.
 
-**TURN server (tavsiya etiladi).** Baʼzi mobil tarmoqlarda telefonlar bir-biriga toʻgʻridan-toʻgʻri ulana olmaydi — bunday paytda ovoz TURN server orqali oʻtadi. TURN boʻlmasa ham ovozli chat ishlaydi, faqat ayrim oʻyinchilar ulana olmasligi mumkin (menyuda «ulanib boʻlmadi» deb chiqadi). Bepul variant — Metered Open Relay (yozilish paytida bepul tarifi oyiga 20 GB edi; bir kishining ovozi soatiga taxminan 25 MB):
+Ovoz imkon boʻlsa telefonlar oʻrtasida toʻgʻridan-toʻgʻri (WebRTC) uzatiladi. Mobil internetda (operator NAT) toʻgʻridan-toʻgʻri ulanish koʻpincha boʻlmaydi — shunda oʻsha juftlik ovozi **server orqali** uzatiladi (16 kHz, siqilgan; bir gapirayotgan kishi ~65 kbit/s). Shuning uchun stoldagilar har doim bir-birini eshitadi. Menyuda har bir kishi yonida «toʻgʻridan-toʻgʻri» yoki «server orqali» yozuvi chiqadi. Ovoz yozib olinmaydi. Render loglarida `[ovoz] stol …` qatorlari kim kim bilan qanday ulanganini koʻrsatadi (ismlarsiz).
 
-1. metered.ca saytida roʻyxatdan oʻting va TURN server login-parolini oling.
-2. Render → xizmatingiz → **Environment** boʻlimiga `TURN_URLS`, `TURN_USERNAME`, `TURN_CREDENTIAL` qoʻshing (namuna `.env.example` faylida). Yoki Metered koʻrsatgan `iceServers` roʻyxatini butunligicha `ICE_SERVERS` ga qoʻying.
-3. Saqlang — server qayta ishga tushadi.
+**TURN server (ixtiyoriy, sifat uchun).** TURN boʻlsa, server orqali oʻtadigan juftliklar ham WebRTC'ning toʻliq sifati va kam kechikishi bilan gaplashadi. Kalitni API orqali olish eng qulayi — server uni oʻzi yangilab turadi:
+
+- **Cloudflare Realtime TURN** (oyiga 1000 GB bepul): Cloudflare panelida Realtime → TURN Server → yangi kalit yarating va Render → **Environment** ga `CF_TURN_KEY_ID` va `CF_TURN_API_TOKEN` qoʻshing.
+- **Metered Open Relay** (oyiga 20 GB bepul): metered.ca da roʻyxatdan oʻtib, ilova nomi va API kalitni `METERED_APP` va `METERED_API_KEY` ga yozing.
+- Yoki doimiy login-parol: `TURN_URLS`, `TURN_USERNAME`, `TURN_CREDENTIAL` (yoki `ICE_SERVERS`).
+
+Saqlang — server qayta ishga tushadi va logda «Ovozli chat: STUN + TURN (…)» deb yozadi.
 
 **Maxfiylik.** Toʻgʻridan-toʻgʻri ulanishda qatnashchilar bir-birining IP manzilini koʻra oladi (WebRTC shunday ishlaydi). Buni yashirish uchun TURN sozlab, `VOICE_RELAY_ONLY=1` qiling — ovoz faqat TURN orqali oʻtadi.
 
@@ -120,16 +125,19 @@ Qoidalar `src/engine.js` faylida jamlangan; boshqa mahalliy variant kerak boʻls
 | `BOT_MODE` | `webhook` yoki `polling`. Boʻsh boʻlsa: `PUBLIC_URL` https boʻlsa — webhook |
 | `PORT` | Server porti (standart 3000) |
 | `DEV_MODE` | `1` — Telegramsiz brauzerda sinash: `http://localhost:3000/?dev=1&uid=1&name=Ali`. Ochiq serverda yoqmang! |
-| `TURN_URLS`, `TURN_USERNAME`, `TURN_CREDENTIAL` | Ovozli chat uchun TURN server (ixtiyoriy, tavsiya etiladi) |
+| `CF_TURN_KEY_ID`, `CF_TURN_API_TOKEN` | Cloudflare Realtime TURN kaliti — server vaqtinchalik TURN parollarini oʻzi oladi (ixtiyoriy) |
+| `METERED_APP`, `METERED_API_KEY` | Metered / Open Relay — ilova nomi va API kalit (ixtiyoriy) |
+| `TURN_URLS`, `TURN_USERNAME`, `TURN_CREDENTIAL` | Doimiy TURN server login-paroli (ixtiyoriy) |
 | `ICE_SERVERS` | STUN/TURN roʻyxati JSON koʻrinishida. Berilsa, `STUN_URLS` va `TURN_*` oʻrniga ishlatiladi |
 | `STUN_URLS` | STUN serverlar (standart: Google va Cloudflare) |
 | `VOICE_RELAY_ONLY` | `1` — ovoz faqat TURN orqali oʻtadi, IP manzillar yashirin qoladi (TURN shart) |
+| `VOICE_FWD` | `0` — toʻgʻridan-toʻgʻri ulanmaganlar ovozini server orqali uzatishni oʻchirish (standart yoqiq) |
 
 ## Bilish kerak
 
 - Stollar server xotirasida saqlanadi. Server qayta ishga tushsa, ochiq oʻyinlar va match hisobi yangidan boshlanadi.
 - Render bepul tarifida server 15 daqiqa ishlatilmasa «uxlaydi». Shundan keyingi birinchi `/bura` ga javob 30–60 soniya kechikishi mumkin.
-- Avtomatik testlar: `npm test` (qoidalar, yopiq koʻzir, jamoa hisobi, stol, oʻyin zali, initData tekshiruvi, ovozli chat signallari, 4 kishilik toʻliq oʻyin).
+- Avtomatik testlar: `npm test` (qoidalar, yopiq koʻzir, jamoa hisobi, stol, botsiz/botli stol va oʻringa taklif, oʻyin zali, initData tekshiruvi, ovozli chat signallari, server orqali ovoz va kodek, TURN API, 4 kishilik toʻliq oʻyin).
 - Demo: `npm run build:demo` → `dist/bura-demo.html`. Kompyuter oʻyinchilariga qarshi, internetsiz ishlaydi.
 
 ## Fayllar
@@ -140,9 +148,11 @@ src/engine.js      Qoidalar va kompyuter oʻyinchisi (server va brauzer uchun um
 src/room.js        Stol: 4 oʻrin (2×2), navbat, taymer, match hisobi
 src/hub.js         WebSocket ulanishlari, guruh zali va ovozli chat signallari
 src/ice.js         Ovozli chat uchun STUN/TURN sozlamalari
+src/turn.js        TURN kalitlarini API orqali olish (Cloudflare / Metered)
+src/adpcm.js       Server orqali ovoz uchun kodek (server va brauzer uchun umumiy)
 src/bot.js         Telegram buyruqlari va guruhdagi stol xabari
 src/auth.js        Telegram initData tekshiruvi
-public/            Mini App: index.html, style.css, app.js, voice.js (ovozli chat), shriftlar
+public/            Mini App: index.html, style.css, app.js, voice.js va voice-worklet.js (ovozli chat), shriftlar
 assets/            BotFather uchun rasm
 test/              Avtomatik testlar
 ```

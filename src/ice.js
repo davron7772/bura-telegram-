@@ -6,10 +6,12 @@
  *  STUN_URLS        — vergul bilan ajratilgan stun: manzillar (berilmasa — Google va Cloudflare)
  *  TURN_URLS        — vergul bilan ajratilgan turn:/turns: manzillar
  *  TURN_USERNAME, TURN_CREDENTIAL — TURN login va paroli
+ *  (Vaqtinchalik TURN kalitlarini API orqali olish — src/turn.js)
  */
 
 const DEFAULT_STUN = ['stun:stun.l.google.com:19302', 'stun:stun.cloudflare.com:3478'];
 const URL_RE = /^(stun|turns?):[^\s"'<>\\]+$/i;
+const PORT53_RE = /:53(\?|$)/; // 53-port (DNS) — baʼzi brauzerlar toʻsadi, ulanishni sekinlashtiradi
 const MAX_SERVERS = 8;
 
 function splitList(v) {
@@ -23,7 +25,7 @@ function cleanServer(s) {
   const urls = raw
     .filter((u) => typeof u === 'string')
     .map((u) => u.trim())
-    .filter((u) => u.length <= 256 && URL_RE.test(u))
+    .filter((u) => u.length <= 256 && URL_RE.test(u) && !PORT53_RE.test(u))
     .slice(0, 8);
   if (!urls.length) return null;
   const out = { urls: urls };
@@ -66,4 +68,18 @@ function hasTurn(list) {
   return (list || []).some((s) => s.urls.some((u) => /^turns?:/i.test(u)));
 }
 
-module.exports = { parseIceServers, hasTurn, DEFAULT_STUN };
+// Tashqi manbadan (TURN API) kelgan roʻyxatni tekshirish
+function cleanList(v, warn) {
+  warn = warn || function () {};
+  if (v && !Array.isArray(v) && v.iceServers) v = v.iceServers;
+  const out = [];
+  (Array.isArray(v) ? v : v ? [v] : []).forEach((x) => {
+    const c = cleanServer(x);
+    if (!c) return;
+    if (c.error) { warn(c.error); return; }
+    if (out.length < MAX_SERVERS) out.push(c);
+  });
+  return out;
+}
+
+module.exports = { parseIceServers, hasTurn, cleanList, DEFAULT_STUN };

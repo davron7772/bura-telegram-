@@ -53,7 +53,12 @@
 
   // Ovozli chat (demoda yoʻq: server kerak)
   const VC = !DEMO && window.BuraVoice && window.BuraVoice.supported()
-    ? window.BuraVoice.create({ send: function (o) { if (T && T.raw) T.raw(o); }, onChange: onVoice, toast: toast, haptic: haptic })
+    ? window.BuraVoice.create({
+      send: function (o) { if (T && T.raw) T.raw(o); },
+      sendBin: function (u8) { if (T && T.bin) T.bin(u8); },
+      noP2P: !!(qs.get('dev') && qs.get('nop2p')), // sinov: toʻgʻridan-toʻgʻri ulanish yoʻq — ovoz server orqali
+      onChange: onVoice, toast: toast, haptic: haptic
+    })
     : null;
   const VBADGE = '<i class="vb" aria-hidden="true"><svg class="on"><use href="#i-mic"/></svg><svg class="off"><use href="#i-mic-off"/></svg></i>';
 
@@ -102,6 +107,7 @@
       clearTimeout(reconnectT);
       if (ws && ws.readyState <= 1) return;
       ws = new WebSocket(url);
+      ws.binaryType = 'arraybuffer'; // server orqali ovoz kadrlari
       ws.onopen = function () {
         retry = 0;
         setConn('open');
@@ -111,6 +117,7 @@
         pingT = setInterval(function () { if (ws.readyState === 1) ws.send('{"t":"ping"}'); }, 20000);
       };
       ws.onmessage = function (e) {
+        if (typeof e.data !== 'string') { if (VC) VC.onBinary(e.data); return; }
         let m;
         try { m = JSON.parse(e.data); } catch (x) { return; }
         onMessage(m);
@@ -132,6 +139,8 @@
         else { toast('Aloqa yoʻq. Qayta ulanmoqda…'); S.busy = false; }
       },
       raw: function (o) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); },
+      // ovoz kadri: aloqa sekin boʻlsa tashlab yuboriladi (kechikish yigʻilmasin)
+      bin: function (u8) { if (ws && ws.readyState === 1 && ws.bufferedAmount < 65536) ws.send(u8); },
       drop: function () { if (ws) ws.close(); } // faqat sinov uchun
     };
   }
@@ -324,10 +333,10 @@
       (active ? '<i class="ring"></i>' : '') + (voice ? VBADGE : '') + '</div>';
   }
 
-  function heroHTML(load) {
-    return '<div class="hero' + (load && !reduceMotion ? ' load' : '') + '" aria-hidden="true">' +
+  function heroHTML(load, mini) {
+    return '<div class="hero' + (load && !reduceMotion ? ' load' : '') + (mini ? ' compact' : '') + '" aria-hidden="true">' +
       backHTML('xl') + cardHTML('AS', { size: 'xl' }) + backHTML('xl') + '</div>' +
-      '<h1 class="wordmark">Bura</h1>';
+      '<h1 class="wordmark' + (mini ? ' compact' : '') + '">Bura</h1>';
   }
 
   // ---------- ekranlar ----------
@@ -370,7 +379,7 @@
     return '<div class="lobby">' + heroHTML(true) +
       '<p class="tag">2×2 jamoa. Kim 61 ochko yigʻadi?</p>' +
       (S.missing ? '<p class="warn">Bu stol yopilgan yoki topilmadi. Yangi stol oching.</p>' : '') +
-      '<div class="lobby-actions">' + btn('create', 'Yangi stol ochish', 'primary') + '</div>' +
+      '<div class="lobby-actions">' + btn('create', 'Yangi stol ochish', 'primary', S.busy) + '</div>' +
       '<p class="note">Guruhda /bura deb yozsangiz, bot hamma uchun stol ochadi.</p>' +
       '<nav class="links">' + linkBtn('rules', 'Qoidalar') + '</nav></div>';
   }
@@ -463,32 +472,35 @@
       const canKick = r.isHost && !s.you && (s.bot || !s.online);
       return '<li class="seat' + (s.online ? '' : ' off') + '">' + avatarHTML(s, i, false) +
         '<div class="who"><b>' + esc(s.name) + (s.you && s.name !== 'Siz' ? ' (siz)' : '') + '</b><small>' + seatNote(s) + '</small></div>' +
-        (canKick ? '<button type="button" class="mini-btn" data-act="kick" data-seat="' + i + '">Chiqarish</button>' : '') + '</li>';
+        (canKick ? '<button type="button" class="mini-btn" data-act="kick" data-seat="' + i + '">' + (s.bot ? 'Olib tashlash' : 'Chiqarish') + '</button>' : '') + '</li>';
     }
+    // Boʻsh oʻrin: doʻstni aynan shu oʻringa taklif qilish, bot qoʻyish (stol egasi) yoki oʻzi oʻtirish
+    const hint = r.mySeat < 0 ? (i % 2 + 1) + '-jamoa' : i % 2 === r.mySeat % 2 ? 'Sherigingiz oʻrni' : 'Raqib oʻrni';
     let b = '';
-    b += '<button type="button" class="mini-btn" data-act="sit" data-seat="' + i + '">Oʻtirish</button>';
-    if (r.isHost) b += '<button type="button" class="mini-btn" data-act="addBot" data-seat="' + i + '">Bot</button>';
-    return '<li class="seat empty"><span class="ava ghost"></span><div class="who"><b>Boʻsh oʻrin</b><small>' +
-      (DEMO ? 'Bot qoʻshing' : 'Doʻstingizni chaqiring') + '</small></div><span class="seat-btns">' + b + '</span></li>';
+    if (!DEMO) b += '<button type="button" class="mini-btn inv" data-act="invite" data-seat="' + i + '">' + iconSvg('i-send') + 'Taklif qilish</button>';
+    if (r.isHost) b += '<button type="button" class="mini-btn" data-act="addBot" data-seat="' + i + '" aria-label="Bu oʻringa bot qoʻshish">' + iconSvg('i-bot') + 'Bot</button>';
+    b += '<button type="button" class="mini-btn plain" data-act="sit" data-seat="' + i + '">Oʻtirish</button>';
+    return '<li class="seat empty"><div class="seat-top"><span class="ava ghost"></span><div class="who"><b>Boʻsh oʻrin</b><small>' + hint +
+      '</small></div></div><div class="seat-btns">' + b + '</div></li>';
   }
 
   function lobbyHTML(r) {
     const filled = r.seats.filter(Boolean).length;
     let h = '<div class="lobby">';
     if (r.group) h += '<nav class="crumbs"><button type="button" class="link" data-act="tohall">← Barcha stollar</button><b>' + r.no + '-stol</b></nav>';
-    h += heroHTML(false) + '<p class="tag">2×2 jamoa. Kim 61 ochko yigʻadi?</p>';
+    h += heroHTML(false, true) + '<p class="tag compact">2×2 jamoa. Kim 61 ochko yigʻadi?</p>'; // ixcham: oʻrinlar va tugmalar birinchi ekranda koʻrinsin
     for (let t = 0; t < 2; t++) {
       h += '<section class="team' + (r.myTeam === t ? ' mine' : '') + '"><h2>' + (t + 1) + '-jamoa' + (r.myTeam === t ? '<small>siz shu jamoadasiz</small>' : '') + '</h2>' +
         '<ul class="seats">' + seatRow(r, t) + seatRow(r, t + 2) + '</ul></section>';
     }
     const need = 4 - filled;
     h += '<p class="status">' + (r.autoStart ? 'Hamma joyida — oʻyin boshlanmoqda…'
-      : need > 0 ? 'Yana ' + need + ' kishi kerak. 4 kishi yigʻilsa, oʻyin oʻzi boshlanadi.' : '') + '</p>';
+      : need > 0 ? 'Oʻyin 4 kishi toʻlganda boshlanadi — yana ' + need + ' kishi kerak.' : '') + '</p>';
     if (VC) h += '<div class="voice-row">' + micHTML('big') + '<div class="vtxt" data-vtext>' + voiceTextHTML() + '</div></div>';
     h += '<div class="lobby-actions">';
-    if (r.isHost && need > 0) h += btn('fillBots', need === 1 ? 'Boʻsh oʻringa bot qoʻshish' : 'Boʻsh oʻrinlarni botlar bilan toʻldirish', 'primary', S.busy);
+    if (!DEMO && need > 0) h += btn('share', iconSvg('i-send') + 'Doʻstlarni taklif qilish', 'primary ico');
+    if (r.isHost && need > 0) h += btn('fillBots', need === 1 ? 'Boʻsh oʻringa bot qoʻshish' : 'Qolgan ' + need + ' oʻringa bot qoʻshish', DEMO ? 'primary' : 'secondary', S.busy);
     if (r.mySeat < 0 && need === 0) h += '<p class="note">Stol toʻla. Siz tomosha qilyapsiz.</p>';
-    if (!DEMO) h += btn('share', 'Doʻstlarni chaqirish', 'secondary');
     h += '</div>';
     if (r.isHost) {
       h += '<label class="toggle"><input type="checkbox" data-act="helper"' + (r.settings.helper ? ' checked' : '') + '>' +
@@ -728,7 +740,7 @@
   }
   function micClass(size, mv) {
     const v = VC.state;
-    return 'mic' + (size ? ' ' + size : '') + ' ' + mv.cls + (v.status === 'live' && v.talking.has(v.me) ? ' talk' : '');
+    return 'mic' + (size ? ' ' + size : '') + ' ' + mv.cls + (mv.badge ? ' has' : '') + (v.status === 'live' && v.talking.has(v.me) ? ' talk' : '');
   }
   function micInner(mv) { return iconSvg(mv.icon) + (mv.badge ? '<b class="vn">' + mv.badge + '</b>' : ''); }
   function micHTML(size) {
@@ -765,17 +777,31 @@
     if (!r || r.myTeam < 0) return (e.seat % 2 + 1) + '-jamoa';
     return e.seat % 2 === r.myTeam ? 'sherigingiz' : 'raqib';
   }
+  // Stolda oʻtirgan, lekin ovozli chatga qoʻshilmagan odamlar (ularni eshitmaysiz — ular ham sizni)
+  function voiceAway() {
+    const r = S.room, v = VC.state, list = [];
+    if (!r) return list;
+    r.seats.forEach(function (s, i) {
+      if (!s || s.bot || s.auto || s.you) return;
+      if (!v.roster.some(function (e) { return e.seat === i; })) list.push({ seat: i, name: s.name, online: s.online });
+    });
+    return list;
+  }
+
   function voicePanelHTML() {
     const v = VC.state;
     let h = '';
-    if (v.roster.length) {
+    const away = voiceAway();
+    if (v.roster.length || away.length) {
       h += '<ul class="vlist">' + v.roster.map(function (e) {
         const me = e.v === v.me;
         let note = e.mic === false ? 'faqat eshitadi' : e.muted ? 'mikrofon oʻchiq' : 'mikrofon yoqiq';
         if (!me && v.status === 'live') {
           const st = VC.peerState(e.v);
-          if (st === 'fail') note = 'ulanib boʻlmadi';
-          else if (st !== 'ok') note = 'ulanmoqda…';
+          if (st === 'ok') note += ' · toʻgʻridan-toʻgʻri';
+          else if (st === 'fwd') note += ' · server orqali';
+          else if (st === 'fail') note = 'ulanib boʻlmadi';
+          else note = 'ulanmoqda…';
         }
         const off = v.silenced.has(e.v);
         return '<li class="vrow' + (v.talking.has(e.v) ? ' talk' : '') + '" data-vrow="' + esc(e.v) + '"><i class="vdot"></i>' +
@@ -784,6 +810,9 @@
             ? '<button type="button" class="vbtn' + (off ? ' off' : '') + '" data-act="vsilence" data-v="' + esc(e.v) + '" aria-pressed="' + off + '" aria-label="' +
               esc(e.name) + (off ? ': ovozini yoqish' : ': ovozini oʻchirish') + '">' + iconSvg(off ? 'i-vol-off' : 'i-vol') + '</button>'
             : '') + '</li>';
+      }).join('') + away.map(function (a) {
+        return '<li class="vrow away"><i class="vdot"></i><span class="vname"><b>' + esc(a.name) + '</b><small>' +
+          voiceRole({ seat: a.seat }) + ' · ' + (a.online ? 'ovozli chatga qoʻshilmagan' : 'oflayn') + '</small></span></li>';
       }).join('') + '</ul>';
     } else {
       h += '<p class="sub">Hozircha hech kim yoʻq.</p>';
@@ -820,6 +849,20 @@
     if (p) setHTML(p, voicePanelHTML());
     if (v.blocked && !S.voiceBlocked) { S.voiceBlocked = true; toast('Ovozni eshitish uchun ekranga bir marta bosing'); }
     if (!v.blocked) S.voiceBlocked = false;
+    noticeVoice();
+  }
+
+  // Men ovozli chatda boʻlmasam va kimdir qoʻshilsa — bir marta eslatamiz
+  function noticeVoice() {
+    const v = VC.state, rid = S.room ? S.room.id : '';
+    if (!rid) return;
+    const known = S.voiceKnownRoom === rid ? S.voiceKnown : new Set();
+    const fresh = v.roster.filter(function (e) { return e.v !== v.me && !known.has(e.v) && e.mic !== false; });
+    S.voiceKnownRoom = rid;
+    S.voiceKnown = new Set(v.roster.map(function (e) { return e.v; }));
+    if (fresh.length && v.status === 'off' && S.screen === 'room' && !S.sheet) {
+      toast(nameList(fresh.map(function (e) { return e.name; })) + ' ovozli chatda — eshitish uchun 🎙 tugmasini bosing');
+    }
   }
   function paintTalk() {
     if (!VC) return;
@@ -845,10 +888,22 @@
       case 'leave': body = '<h2>Stoldan chiqasizmi?</h2><p>Oʻrningizda bot oʻynaydi. Qaytib kirsangiz, oʻyinni davom ettirasiz.</p>' +
         '<div class="btns">' + btn('close', 'Qolish', 'secondary') + btn('leave-yes', 'Chiqish', 'danger') + '</div>'; break;
       case 'result': body = r && r.result ? resultHTML(r) : ''; break;
+      case 'create': body = createHTML(); break;
     }
     if (!body) return '';
     return '<div class="sheet-wrap' + (S.sheetAnim && !reduceMotion ? ' anim' : '') + '" data-act="backdrop"><div class="sheet" role="dialog" aria-modal="true">' +
       '<button type="button" class="x" data-act="close" aria-label="Yopish">×</button>' + body + '</div></div>';
+  }
+
+  // Yangi stol: botsiz (doʻstlar bilan) yoki botlar bilan
+  function choiceHTML(act, icon, title, text, cls) {
+    return '<button type="button" class="choice' + (cls ? ' ' + cls : '') + '" data-act="' + act + '"' + (S.busy ? ' disabled' : '') + '>' +
+      '<span class="ci">' + iconSvg(icon) + '</span><span class="ct"><b>' + title + '</b><small>' + text + '</small></span></button>';
+  }
+  function createHTML() {
+    return '<h2>Yangi stol</h2><p class="sub">Kim bilan oʻynaysiz?</p><div class="choices">' +
+      choiceHTML('new-friends', 'i-users', 'Doʻstlar bilan', 'Stol botsiz ochiladi. Doʻstlaringizni taklif qiling, kerak boʻlsa — bot qoʻshing. Oʻyin 4 kishi toʻlganda boshlanadi.') +
+      choiceHTML('new-bots', 'i-bot', 'Botlar bilan', 'Boʻsh oʻrinlarga botlar oʻtiradi — oʻyin darhol boshlanadi.', 'alt') + '</div>';
   }
 
   function teamsHTML(r, res) {
@@ -876,7 +931,7 @@
     if (r.matchWins[0] || r.matchWins[1]) h += '<p class="sub">Yutilgan matchlar: ' + r.matchWins[r.myTeam === 1 ? 1 : 0] + ' : ' + r.matchWins[r.myTeam === 1 ? 0 : 1] + '</p>';
     if (VC) {
       h += '<h3>Ovozli chat</h3><div data-vpanel>' + voicePanelHTML() + '</div>' +
-        '<p class="vnote">Ovoz toʻgʻridan-toʻgʻri qatnashchilar oʻrtasida uzatiladi va yozib olinmaydi. Bir xonada oʻtirgan boʻlsangiz, quloqchin taqing — aks holda ovoz qaytadi.</p>';
+        '<p class="vnote">Ovoz imkon boʻlsa toʻgʻridan-toʻgʻri, boʻlmasa server orqali uzatiladi va yozib olinmaydi. Bir-biringizni eshitish uchun hamma 🎙 tugmasini bosishi kerak. Bir xonada oʻtirgan boʻlsangiz, quloqchin taqing — aks holda ovoz qaytadi.</p>';
     }
     h += '<div class="lobby-actions">';
     if (r.group) h += btn('tohall', 'Barcha stollar (zal)', 'secondary');
@@ -995,10 +1050,22 @@
     haptic(type === 'beat' ? 'heavy' : 'light');
   }
 
-  function share() {
-    const link = S.invite;
+  // Taklif havolasi: aniq oʻrin uchun stol raqamiga "s<oʻrin>" qoʻshiladi — doʻstingiz aynan oʻsha joyga oʻtiradi
+  function inviteLink(seat) {
+    const r = S.room, link = S.invite;
+    if (!link || !r || !(seat >= 0 && seat < 4)) return link;
+    return link.slice(-r.id.length) === r.id ? link + 's' + seat : link;
+  }
+  function share(seat) {
+    const r = S.room;
+    const link = inviteLink(seat);
     if (!link) { toast('Havola hali tayyor emas'); return; }
-    const url = 'https://t.me/share/url?url=' + encodeURIComponent(link) + '&text=' + encodeURIComponent('Bura oʻynaymizmi? 🃏 Stolga qoʻshiling!');
+    let text = 'Bura oʻynaymizmi? 🃏 Stolga qoʻshiling!';
+    if (r && seat >= 0 && r.mySeat >= 0) {
+      text = seat % 2 === r.mySeat % 2 ? 'Bura oʻynaymizmi? 🃏 Sherigim boʻling — joy sizni kutyapti!' : 'Bura oʻynaymizmi? 🃏 Raqib boʻlib oʻtiring — joy sizni kutyapti!';
+    }
+    haptic('light');
+    const url = 'https://t.me/share/url?url=' + encodeURIComponent(link) + '&text=' + encodeURIComponent(text);
     try { if (TG && TG.isVersionAtLeast('6.1')) { TG.openTelegramLink(url); return; } } catch (e) { /* */ }
     if (navigator.share) { navigator.share({ title: 'Bura', url: link }).catch(function () {}); return; }
     window.open(url, '_blank');
@@ -1021,7 +1088,7 @@
         S.sheet = null;
         return send({ t: 'leave' });
       case 'leave-yes': S.sheet = null; render(); return send({ t: 'leave' });
-      case 'share': return share();
+      case 'share': return share(-1);
       case 'start': return send({ t: 'start' }, true);
       case 'addBot': return send({ t: 'addBot', seat: el && el.hasAttribute('data-seat') ? Number(el.getAttribute('data-seat')) : undefined });
       case 'fillBots': return send({ t: 'fillBots' }, true);
@@ -1029,10 +1096,14 @@
       case 'sit': case 'return': S.sheet = null; return send({ t: 'sit', seat: el && el.hasAttribute('data-seat') ? Number(el.getAttribute('data-seat')) : undefined });
       case 'next': S.sheet = null; return send({ t: 'next' }, true);
       case 'lobby': S.sheet = null; return send({ t: 'lobby' }, true);
-      case 'create': return send({ t: 'create' }, true);
+      case 'create': case 'hnew': return openSheet('create');
+      case 'new-friends': case 'new-bots':
+        S.sheet = null;
+        render();
+        return send({ t: 'create', bots: act === 'new-bots' }, true);
+      case 'invite': return share(Number(el.getAttribute('data-seat')));
       // guruh zali
       case 'tohall': S.sheet = null; return send({ t: 'hall' }, true);
-      case 'hnew': return send({ t: 'create' }, true);
       case 'henter': return send({ t: 'join', room: el.getAttribute('data-room') }, true);
       case 'hsit': {
         const seat = el.hasAttribute('data-seat') ? Number(el.getAttribute('data-seat')) : -1;

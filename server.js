@@ -14,6 +14,7 @@ const { Hub } = require('./src/hub');
 const { TelegramApi } = require('./src/telegram');
 const { createBot } = require('./src/bot');
 const { parseIceServers, hasTurn } = require('./src/ice');
+const { createTurn } = require('./src/turn');
 
 // Render'da manzil RENDER_EXTERNAL_URL orqali avtomatik keladi
 const publicUrl = String(process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || '').trim().replace(/\/+$/, '');
@@ -27,15 +28,20 @@ const cfg = {
   turnSeconds: Math.max(10, Math.min(120, Number(process.env.TURN_SECONDS) || 30)),
   iceServers: parseIceServers(process.env, function (msg) { console.warn('[ovoz] ' + msg); })
 };
+// TURN kalitlari API orqali (Cloudflare yoki Metered) — ixtiyoriy
+const turn = createTurn(process.env, { log: function (msg) { console.warn('[ovoz] ' + msg); } });
 // Ovoz faqat TURN orqali: oʻyinchilar bir-birining IP manzilini koʻrmaydi (TURN server shart)
-cfg.voiceRelay = process.env.VOICE_RELAY_ONLY === '1' && hasTurn(cfg.iceServers);
-if (process.env.VOICE_RELAY_ONLY === '1' && !cfg.voiceRelay) console.warn('[ovoz] VOICE_RELAY_ONLY=1 uchun TURN server kerak — oʻchirildi');
+cfg.voiceRelay = process.env.VOICE_RELAY_ONLY === '1';
+if (cfg.voiceRelay && !hasTurn(cfg.iceServers) && !turn) console.warn('[ovoz] VOICE_RELAY_ONLY=1 uchun TURN server kerak — TURN boʻlmasa eʼtiborsiz qoldiriladi');
+// WebRTC ulanmagan juftliklar ovozini server uzatadi (VOICE_FWD=0 — oʻchirish)
+cfg.voiceFwd = process.env.VOICE_FWD !== '0';
 
 const VERSION = Date.now().toString(36);
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const SHARED = {
   '/engine.js': path.join(__dirname, 'src', 'engine.js'),
-  '/room.js': path.join(__dirname, 'src', 'room.js')
+  '/room.js': path.join(__dirname, 'src', 'room.js'),
+  '/adpcm.js': path.join(__dirname, 'src', 'adpcm.js')
 };
 const TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -54,7 +60,9 @@ const hub = new Hub({
   devMode: cfg.devMode,
   turnSeconds: cfg.turnSeconds,
   iceServers: cfg.iceServers,
+  turn: turn,
   voiceRelay: cfg.voiceRelay,
+  voiceFwd: cfg.voiceFwd,
   inviteLink: function (id) { return bot ? bot.appLink(id) : (cfg.publicUrl || '') + '/?room=' + id; },
   onRoomChange: function (room) { if (bot) bot.onRoomChange(room); },
   onRoomRemoved: function (room) { if (bot) bot.onRoomRemoved(room); },
@@ -98,7 +106,9 @@ hub.attach(server);
 
 server.listen(cfg.port, function () {
   console.log('Bura serveri ishga tushdi: http://localhost:' + cfg.port);
-  console.log('Ovozli chat: ' + (hasTurn(cfg.iceServers) ? 'STUN + TURN' : 'faqat STUN (TURN sozlanmagan)') + (cfg.voiceRelay ? ', faqat TURN orqali' : ''));
+  console.log('Ovozli chat: ' + (turn ? 'STUN + TURN (' + turn.name + ', API orqali)' : hasTurn(cfg.iceServers) ? 'STUN + TURN' : 'faqat STUN (TURN sozlanmagan)') +
+    (cfg.voiceRelay ? ', faqat TURN orqali' : '') + (cfg.voiceFwd ? '; ulanmaganlar uchun ovoz server orqali' : ''));
+  if (turn) turn.start();
   if (cfg.devMode) console.log('DEV rejimi: brauzerda sinash — http://localhost:' + cfg.port + '/?dev=1&uid=1&name=Ali');
   if (!cfg.botToken) {
     console.warn('BOT_TOKEN berilmagan — Telegram bot oʻchiq' + (cfg.devMode ? ' (DEV rejimida brauzerda sinash mumkin)' : ''));
@@ -115,6 +125,7 @@ server.listen(cfg.port, function () {
 
 function shutdown() {
   console.log('Toʻxtatilmoqda…');
+  if (turn) turn.stop();
   hub.close();
   server.close(function () { process.exit(0); });
   setTimeout(function () { process.exit(0); }, 3000).unref();
