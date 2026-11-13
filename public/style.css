@@ -89,6 +89,21 @@ svg { display: block; }
   padding: calc(var(--w) * .025) calc(var(--w) * .06);
 }
 
+/* "Kashta" kartalar: oq zigʻir fon, toʻq yashil ichki hoshiya, rasmli shohlar */
+.skin-kashta .card.face {
+  background: #fbfaf6;
+  box-shadow:
+    inset 0 0 0 calc(var(--w) * .04) #fbfaf6,
+    inset 0 0 0 calc(var(--w) * .04 + 1.2px) #2e4a36,
+    0 0 0 1px rgba(30, 58, 40, .55), 0 3px 8px rgba(25, 4, 10, .38);
+}
+.skin-kashta .card.red { color: #c21f2a; }
+/* rasm burchakdagi belgilarga tegmasin: markazda, karta balandligining ~2/3 qismi */
+.card.art { overflow: hidden; }
+.card .mid .pic { height: calc(var(--w) * 1.42 * .66); width: auto; max-width: 54%; object-fit: contain; pointer-events: none; -webkit-user-drag: none; }
+.card.sm.art .mid, .card.xs.art .mid { padding: 22% 0 0 20%; }
+.card.sm .mid .pic, .card.xs .mid .pic { height: calc(var(--w) * 1.42 * .64); max-width: 62%; }
+
 .card.sm { --w: var(--tw); }
 .card.sm .ix { left: 7%; top: 4%; }
 .card.sm .ix b { font-size: calc(var(--w) * .3); }

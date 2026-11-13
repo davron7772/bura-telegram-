@@ -4,6 +4,29 @@
 
   const E = window.BuraEngine;
   const DEMO = !!window.BURA_DEMO;
+
+  // Karta koʻrinishi (skin): "kashta" — rasmli shohlar, malikalar, valetlar; "classic" — oddiy harflar.
+  // Tanlov shu qurilmada saqlanadi. Demo internetsiz ishlaydi — unda rasmlar yoʻq.
+  const SKIN_ART = { JH: 'JH', KH: 'KH', QH: 'QD', JD: 'JD', QD: 'QD', KD: 'KD', JC: 'JC', QC: 'QC', KC: 'KC', JS: 'JS', QS: 'QS', KS: 'KS', AS: 'AS' };
+  function loadSkin() {
+    if (DEMO) return 'classic';
+    try { return localStorage.getItem('bura.skin') === 'classic' ? 'classic' : 'kashta'; } catch (e) { return 'kashta'; }
+  }
+  let SKIN = loadSkin();
+  function applySkin() {
+    document.documentElement.classList.toggle('skin-kashta', SKIN === 'kashta');
+    if (SKIN === 'kashta' && !applySkin.pre) {
+      applySkin.pre = true; // rasmlar oldindan yuklansin — karta chiqqanda miltillamasin
+      Object.keys(SKIN_ART).forEach(function (k) { if (SKIN_ART[k] === k) new Image().src = artUrl(k); });
+    }
+  }
+  function artUrl(k) { return '/skins/kashta/' + SKIN_ART[k] + '.webp?v=1'; }
+  function setSkin(on) {
+    SKIN = on ? 'kashta' : 'classic';
+    try { localStorage.setItem('bura.skin', SKIN); } catch (e) { /* */ }
+    applySkin();
+  }
+  applySkin();
   const TGW = window.Telegram && window.Telegram.WebApp;
   const TG = TGW && TGW.initData ? TGW : null;
   const qs = new URLSearchParams(location.search);
@@ -302,10 +325,11 @@
     const court = r === 'K' || r === 'Q' || r === 'J';
     const red = s === 'H' || s === 'D';
     const tag = o.tag || 'div';
-    const cls = 'card face' + (red ? ' red' : '') + (o.size ? ' ' + o.size : '') + (o.cls ? ' ' + o.cls : '');
+    const art = SKIN === 'kashta' && SKIN_ART[c] ? artUrl(c) : null;
+    const cls = 'card face' + (red ? ' red' : '') + (art ? ' art' : '') + (o.size ? ' ' + o.size : '') + (o.cls ? ' ' + o.cls : '');
     let h = '<' + tag + (tag === 'button' ? ' type="button"' : '') + ' class="' + cls + '" data-c="' + c + '" aria-label="' + cardName(c) + '"' + (o.attrs || '') + '>' +
       '<span class="ix"><b>' + d + '</b>' + suitSvg(s) + '</span>' +
-      '<span class="mid">' + (court ? '<i class="court">' + d + '</i>' : suitSvg(s)) + '</span>';
+      '<span class="mid">' + (art ? '<img class="pic" src="' + art + '" alt="" draggable="false">' : court ? '<i class="court">' + d + '</i>' : suitSvg(s)) + '</span>';
     if (!small) h += '<span class="ix ix2"><b>' + d + '</b>' + suitSvg(s) + '</span>';
     if (o.pt) { const p = E.points(c); if (p) h += '<span class="pt">' + p + '</span>'; }
     return h + '</' + tag + '>';
@@ -500,6 +524,7 @@
       h += '<label class="toggle"><input type="checkbox" data-act="helper"' + (r.settings.helper ? ' checked' : '') + '>' +
         '<span><b>Ochko yordamchisi</b><small>Jamoangiz olgan ochiq kartalar ochkosini koʻrsatadi</small></span></label>';
     }
+    if (!DEMO) h += skinToggle();
     if (DEMO) h += '<p class="demo-note">Demo: sherigingiz va raqiblar — kompyuter. Telegramʼda stolga doʻstlaringiz oʻtiradi.</p>';
     h += '<nav class="links">' + linkBtn('rules', 'Qoidalar') + (r.mySeat >= 0 && !DEMO ? linkBtn('leave', 'Stoldan turish') : '') + '</nav></div>';
     return h;
@@ -562,6 +587,11 @@
         return '<span class="wav" style="--av:' + AVATAR_BG[(i + 1) % AVATAR_BG.length] + '"><span>' + esc(firstLetter(x.name)) + '</span>' +
           (x.photo ? '<img src="' + esc(x.photo) + '" alt="" referrerpolicy="no-referrer">' : '') + '</span>';
       }).join('') + '</span><small>👀 ' + (w.length === 1 ? esc(names[0]) : w.length + ' kishi') + '</small></button>';
+  }
+
+  function skinToggle() {
+    return '<label class="toggle"><input type="checkbox" data-act="skin"' + (SKIN === 'kashta' ? ' checked' : '') + '>' +
+      '<span><b>Rasmli kartalar</b><small>Shoh, malika va valetlar kashta uslubidagi rasmlar bilan (faqat sizda)</small></span></label>';
   }
 
   function oppHTML(r, s, p) {
@@ -940,6 +970,7 @@
       h += '<h3>Ovozli chat</h3><div data-vpanel>' + voicePanelHTML() + '</div>' +
         '<p class="vnote">Ovoz imkon boʻlsa toʻgʻridan-toʻgʻri, boʻlmasa server orqali uzatiladi va yozib olinmaydi. Bir-biringizni eshitish uchun hamma 🎙 tugmasini bosishi kerak. Bir xonada oʻtirgan boʻlsangiz, quloqchin taqing — aks holda ovoz qaytadi.</p>';
     }
+    if (!DEMO) h += skinToggle();
     h += '<div class="lobby-actions">';
     if (r.group) h += btn('tohall', 'Barcha stollar (zal)', 'secondary');
     h += btn('rules', 'Qoidalar', 'secondary');
@@ -1144,6 +1175,7 @@
   app.addEventListener('change', function (e) {
     const t = e.target;
     if (t.matches && t.matches('input[data-act="helper"]')) send({ t: 'setting', key: 'helper', value: t.checked });
+    if (t.matches && t.matches('input[data-act="skin"]')) { setSkin(t.checked); render(); }
   });
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape' && S.sheet) handle('close', null);
