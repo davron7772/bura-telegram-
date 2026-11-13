@@ -1153,7 +1153,7 @@
       '<li>Eng kuchli toʻplam egasi hamma kartalarni oladi, birinchi boʻlib kolodadan oladi va yuradi.</li></ul>' +
       '<h3>Kombinatsiyalar</h3><ul class="rules">' +
       '<li><b>Bura</b> — qoʻldagi 4 kartaning hammasi koʻzir: navbatsiz yuradi.</li>' +
-      '<li><b>4 ta tuz</b> — qoʻlida 4 ta tuz chiqqan yoki 4 ta tuzni yigʻib olgan jamoa mutlaq gʻolib: raqib jamoa hisobi 14 boʻladi va match tugaydi.</li></ul>' +
+      '<li><b>4 ta tuz</b> — 4 ta tuzni yigʻib olgan jamoa mutlaq gʻolib (tarqatishda bitta oʻyinchiga 4 ta tuz tushmaydi): raqib jamoa hisobi 14 boʻladi va match tugaydi.</li></ul>' +
       '<h3>Hisob</h3><ul class="rules">' +
       '<li>Kartalar tugagach jamoa ochkolari sanaladi: 61 va undan koʻp — gʻalaba. 60:60 — durang: hech kimga ball yozilmaydi, keyingi raundda yutqazgan jamoaga yana +2 ball qoʻshiladi.</li>' +
       '<li>Yurish vaqti tugasa, qoʻlingizdagi chap tarafdagi kartalar avtomatik yuriladi.</li>' +

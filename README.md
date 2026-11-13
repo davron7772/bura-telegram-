@@ -114,7 +114,7 @@ Saqlang — server qayta ishga tushadi va logda «Ovozli chat: STUN + TURN (…)
 - Ura olmasangiz yoki xohlamasangiz, kartalar yopiq beriladi.
 - Eng kuchli toʻplam egasi hamma kartalarni oladi, birinchi boʻlib kolodadan oladi va yuradi.
 - **Bura** — qoʻldagi 4 kartaning hammasi koʻzir: navbatsiz yuradi (dastur buni avtomatik qiladi).
-- **4 ta tuz** — bir oʻyinchining qoʻlida 4 ta tuz chiqsa yoki jamoa 4 ta tuzni yigʻib olsa — mutlaq gʻalaba: raqib jamoa hisobi 14 boʻladi (match tugaydi).
+- **4 ta tuz** — jamoa 4 ta tuzni yigʻib olsa — mutlaq gʻalaba (tarqatishda bitta oʻyinchiga 4 ta tuz tushmaydi, tuzlar oʻyin davomida yigʻiladi): raqib jamoa hisobi 14 boʻladi (match tugaydi).
 - Kartalar tugagach jamoa ochkolari sanaladi: 61 va undan koʻp — gʻalaba. 60:60 — durang: hech kimga ball yozilmaydi, keyingi raundda yutqazgan jamoaga yana +2 ball qoʻshiladi (ketma-ket duranglarda — har biri uchun +2).
 - Yurish vaqti tugasa, qoʻldagi chap tarafdagi kartalar avtomatik yuriladi (javobda — chapdan kerakli sondagi kartalar; ura olsa — ochiq, aks holda yopiq).
 - Stolni kuzatayotganlar (mehmonlar) oʻynayotganlarga ham koʻrinadi — stol oʻrtasida, oʻng tomonda.

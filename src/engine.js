@@ -147,11 +147,15 @@
     opts = opts || {};
     const n = N;
     const leader = (((opts.leader || 0) % n) + n) % n;
-    const deck = opts.deck ? opts.deck.slice() : shuffle(DECK, opts.rng);
-    const hands = [];
-    for (let i = 0; i < n; i++) hands.push([]);
-    let p = 0;
-    for (let r = 0; r < HAND; r++) for (let i = 0; i < n; i++) hands[(leader + i) % n].push(deck[p++]);
+    let deck, hands, p, tries = 0;
+    // Tarqatishda bitta oʻyinchiga 4 ta tuz tushmaydi — tuzlarni oʻyinchilar oʻyin davomida yigʻadi
+    do {
+      deck = opts.deck ? opts.deck.slice() : shuffle(DECK, opts.rng);
+      hands = [];
+      for (let i = 0; i < n; i++) hands.push([]);
+      p = 0;
+      for (let r = 0; r < HAND; r++) for (let i = 0; i < n; i++) hands[(leader + i) % n].push(deck[p++]);
+    } while (!opts.deck && hands.some(isFourAces) && ++tries < 50);
     const trumpCard = deck[p++];
     const hiddenCard = deck[p++];
     const st = {
@@ -195,9 +199,6 @@
     st.turn = leader;
     st.phase = 'lead';
     const order = seatsFrom(st.n, leader);
-    for (const s of order) {
-      if (isFourAces(st.hands[s])) return endRound(st, { type: 'aces', seat: s, team: teamOf(s), cards: st.hands[s].slice() });
-    }
     if (st.hands.every(function (h) { return h.length === 0; })) return endByPoints(st);
     // Bura: hamma kartasi koʻzir boʻlgan oʻyinchi navbatsiz yuradi
     for (const s of order) {

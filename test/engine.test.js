@@ -172,14 +172,16 @@ test('Bura: hamma kartasi koʻzir boʻlgan oʻyinchi navbatsiz yuradi', () => {
   assert.equal(own.trick, null);
 });
 
-test('4 ta tuz qoʻlda — mutlaq gʻalaba (raqibga 14)', () => {
+test('qoʻlda 4 ta tuz — gʻalaba emas (tuzlar yigʻilishi kerak); tarqatishda bitta oʻyinchiga 4 ta tuz tushmaydi', () => {
   const st = E.newRound({ leader: 0, deck: deckFor(0, [
     ['6H', '7H', '8H', '9H'], ['AS', 'AH', 'AD', 'AC'], ['6C', '7C', '8C', '9C'], ['JC', 'QC', 'KC', '10C']
   ], '9D', '6S') });
-  assert.equal(st.phase, 'roundEnd');
-  assert.equal(st.result.type, 'aces');
-  assert.equal(st.result.team, 1);
-  assert.equal(st.result.award, 14);
+  assert.equal(st.phase, 'lead');
+  assert.equal(st.result, null);
+  for (let g = 0; g < 3000; g++) {
+    const s = E.newRound({ leader: g % 4, rng: rngFrom(9000 + g) });
+    assert.ok(!s.hands.some(E.isFourAces), 'tarqatish ' + g);
+  }
 });
 
 test('4 ta tuzni yigʻgan jamoa — mutlaq gʻolib', () => {
