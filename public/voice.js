@@ -816,6 +816,18 @@
       });
     }
 
+    // Mikrofonsiz qoʻshilish: stolga oʻtirgan kishi boshqalarni darhol eshitadi.
+    // Mikrofon soʻralmaydi; 🎙 tugmasi bosilsa — mikrofon yoqiladi.
+    function listen() {
+      if (V.status !== 'off' || !supported()) return;
+      V.status = 'joining'; V.offline = false; V.blocked = false;
+      prime();
+      audioCtx();
+      setStream(null);
+      sendJoin();
+      onChange();
+    }
+
     function stop(reason) {
       if (V.status === 'off') return;
       if (reason === 'user' && !V.offline) send({ t: 'voice_leave' });
@@ -910,6 +922,7 @@
     return {
       state: V,
       join: join,
+      listen: listen,
       leave: function () { stop('user'); },
       reset: function () { stop('reset'); },
       toggleMic: toggleMic,

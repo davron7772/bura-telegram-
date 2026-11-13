@@ -177,3 +177,28 @@ test('«Tayyorman»: kimdir turib ketsa, vaqt toʻxtaydi', () => {
   r.setReady('u1');
   assert.equal(r.phase, 'playing');
 });
+
+test('stol egasi onlayn oʻyinchini chiqaradi → u mehmon; boshqalar chiqara olmaydi', () => {
+  const { r } = setup(4);
+  assert.equal(r.hostId, 'u1');
+  const i2 = r.seats.findIndex((s) => s && s.id === 'u2');
+  const i3 = r.seats.findIndex((s) => s && s.id === 'u3');
+  assert.equal(r.kick('u3', i2), 'Faqat stol egasi');
+  assert.ok(r.kick('u1', r.seats.findIndex((s) => s && s.id === 'u1')));
+  assert.equal(r.kick('u1', i2), null);
+  assert.equal(r.seats[i2], null);
+  assert.ok(r.spectators.has('u2'));
+  assert.ok(r.snapshot('u2').kickedOut > 0);
+  assert.equal(r.snapshot('u3').kickedOut, 0);
+  assert.ok(r.seats[i3]);
+});
+
+test('stol egasi ketsa — undan keyin kirgan oʻyinchi egasi boʻladi', () => {
+  const { r } = setup(4);
+  const order = r.seats.slice().sort((a, b) => a.joined - b.joined).map((s) => s.id);
+  assert.equal(r.hostId, order[0]);
+  r.leave(order[0]);
+  assert.equal(r.hostId, order[1]);
+  r.leave(order[1]);
+  assert.equal(r.hostId, order[2]);
+});

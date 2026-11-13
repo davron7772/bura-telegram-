@@ -260,6 +260,16 @@
     S.selected = g && g.hand ? S.selected.filter(function (c) { return g.hand.indexOf(c) >= 0; }) : [];
     S.deadlineAt = room.deadlineIn ? Date.now() + room.deadlineIn : 0;
     S.readyAt = room.readyIn ? Date.now() + room.readyIn : 0;
+    // Stol egasi chiqardi
+    if (room.kickedOut && room.kickedOut !== S.kickedSeen) {
+      S.kickedSeen = room.kickedOut;
+      toast('Stol egasi sizni oʻyindan chiqardi — siz mehmonsiz.');
+    }
+    // Stolga oʻtirgan kishi boshqalarni darhol eshitadi (mikrofonsiz). Oʻzi chiqib ketsa — qayta ulanmaymiz
+    if (VC && room.mySeat >= 0 && VC.state.status === 'off' && S.autoListen !== room.id) {
+      S.autoListen = room.id;
+      VC.listen();
+    }
     // «Tayyorman» vaqtida bosilmadi — mehmon rejimi
     if (room.readyOut && room.readyOut !== S.readyOutSeen) {
       S.readyOutSeen = room.readyOut;
@@ -456,6 +466,12 @@
   function hallSeat(t, i) {
     const s = t.seats[i];
     const room = ' data-room="' + esc(t.id) + '" data-seat="' + i + '"';
+    if (isMyLobby(t) && s && !s.bot && !s.you && S.room.isHost) {
+      return '<button type="button" class="hs take ' + HALL_POS[i] + '" data-act="seatmenu" data-seat="' + i + '" aria-label="' + esc(s.name) + ': oʻyindan chiqarish">' +
+        '<span class="hava t' + (i % 2) + (s.online ? '' : ' off') + '" style="--av:' + AVATAR_BG[i % AVATAR_BG.length] + '"><span>' + esc(firstLetter(s.name)) + '</span>' +
+        (s.photo ? '<img src="' + esc(s.photo) + '" alt="" referrerpolicy="no-referrer">' : '') + '</span><small>' + esc(s.name) + '</small>' +
+        (t.readyIn ? '<i class="rdy' + (s.ready ? ' ok' : '') + '">' + (s.ready ? '✓' : '…') + '</i>' : '') + '</button>';
+    }
     if (isMyLobby(t) && (!s || s.bot)) {
       // oʻzim turgan stol: boʻsh oʻrin — bot/taklif/oʻtirish, bot — chiqarish
       if (!s) return '<button type="button" class="hs free ' + HALL_POS[i] + '" data-act="seatmenu" data-seat="' + i + '" aria-label="Boʻsh oʻrin: ' + (i % 2 + 1) + '-jamoa">' +
@@ -684,9 +700,9 @@
     const g = r.game, seat = r.seats[s];
     const active = r.phase === 'playing' && isActor(g, s);
     const partner = r.myTeam >= 0 && s % 2 === r.myTeam;
-    const tap = seat.bot || seat.auto; // botni bosib — chiqarish
+    const tap = seat.bot || seat.auto || (r.isHost && !seat.you); // botni bosib — chiqarish; stol egasi — istalgan oʻyinchini
     return '<div class="opp' + (active ? ' turn' : '') + (seat.online ? '' : ' off') + (partner ? ' partner' : '') + '">' +
-      (tap ? '<button type="button" class="seat-tap" data-act="seatmenu" data-seat="' + s + '" aria-label="' + esc(seat.name) + ': bot — bosing">' + avatarHTML(seat, s, active) + '</button>' : avatarHTML(seat, s, active)) +
+      (tap ? '<button type="button" class="seat-tap" data-act="seatmenu" data-seat="' + s + '" aria-label="' + esc(seat.name) + ': bosing">' + avatarHTML(seat, s, active) + '</button>' : avatarHTML(seat, s, active)) +
       '<div class="nm">' + (seat.bot || seat.auto ? '<svg class="bi" aria-label="bot"><use href="#i-bot"/></svg>' : '') + '<span>' + esc(seat.name) + '</span></div>' +
       (partner ? '<div class="mate">sherik</div>' : '') +
       '<div class="meta"><span class="fan" aria-label="' + g.counts[s] + ' ta karta">' + repeat('<i class="mini"></i>', g.counts[s]) + '</span>' +
@@ -1067,6 +1083,10 @@
       if (can) b += btn('kick-here', 'Stoldan chiqarish', 'danger', S.busy, ' data-seat="' + i + '"');
       else h += '<p class="note">' + (r.mySeat < 0 ? 'Botni stolda oʻtirganlar chiqara oladi.' : 'Faqat stol egasi chiqara oladi.') + '</p>';
       if (r.phase === 'playing' && can) h += '<p class="note">Chiqarilsa, oʻyin toʻxtaydi — boʻsh joyga kimdir oʻtirishi yoki yangi bot qoʻshilishi kerak.</p>';
+    } else if (r.isHost && !s.you) {
+      h = '<h2>' + esc(s.name) + '</h2><p class="sub">' + role + (s.online ? '' : ' · oflayn') + '</p>' +
+        '<p class="note">Chiqarilgan oʻyinchi mehmon (kuzatuvchi) boʻlib qoladi.' + (r.phase === 'playing' ? ' Oʻyin toʻxtaydi — boʻsh joyga kimdir oʻtirishi yoki bot qoʻshilishi kerak.' : '') + '</p>';
+      b += btn('kick-here', 'Oʻyindan chiqarish', 'danger', S.busy, ' data-seat="' + i + '"');
     } else return '';
     return h + '<div class="lobby-actions">' + b + '</div>';
   }
@@ -1372,6 +1392,8 @@
   if (qs.get('dev') || DEMO) window.__bura = { S: S, send: send, voice: VC, drop: function () { if (T && T.drop) T.drop(); } };
 
   // ---------- ishga tushirish ----------
+  // Har qanday bosish ovoz chalishga ruxsat beradi (avtomatik eshitish uchun)
+  document.addEventListener('pointerdown', function () { if (VC) VC.unlock(); }, true);
   initTelegram();
   if (window.BuraI18n) window.BuraI18n.start(); // rus tili tanlangan boʻlsa — ekran matnlari tarjima qilinadi
   render();

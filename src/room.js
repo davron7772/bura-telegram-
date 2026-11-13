@@ -63,6 +63,8 @@
     this.deadline = 0;
     this.deadlineTotal = 0;
     this.botSeq = 0;
+    this.joinSeq = 0;       // stolga oʻtirish tartibi (stol egasi ketsa — keyingi kelgan egasi boʻladi)
+    this.kickedOut = null;  // { at, id } — stol egasi chiqargan oʻyinchi
     this.resumeAsk = false;   // oʻyin oʻrtasida boʻshagan oʻrin toʻldi: stol egasi davom ettirish yoki yangidan boshlashni tanlaydi
     this.resumeAt = 0;
     this.resumeTimer = null;
@@ -124,7 +126,9 @@
     const self = this;
     const ok = this.seats.some(function (s) { return s && !s.bot && !s.auto && s.id === self.hostId; });
     if (!ok) {
-      const h = this.seats.find(function (s) { return s && !s.bot && !s.auto; });
+      // Stol egasi ketdi — undan keyin stolga kirgan (eng oldin oʻtirgan) oʻyinchi egasi boʻladi
+      let h = null;
+      this.seats.forEach(function (s) { if (s && !s.bot && !s.auto && (!h || (s.joined || 0) < (h.joined || 0))) h = s; });
       this.hostId = h ? h.id : null;
     }
   };
@@ -172,7 +176,7 @@
   };
 
   P.addHuman = function (user, idx) {
-    this.seats[idx] = { id: user.id, name: user.name, photo: user.photo || null, bot: false, auto: false, offlineSince: 0, ready: false };
+    this.seats[idx] = { id: user.id, name: user.name, photo: user.photo || null, bot: false, auto: false, offlineSince: 0, ready: false, joined: ++this.joinSeq };
     this.spectators.delete(user.id);
     if (!this.hostId) this.hostId = user.id;
     this.checkAutoStart();
@@ -238,7 +242,7 @@
     // Oʻyin oʻrtasida yoki raund oxirida boʻsh oʻringa oʻtirish
     if (this.phase !== 'lobby' && (idx >= 0 ? !this.seats[idx] : this.firstFree() >= 0)) {
       const t = idx >= 0 ? idx : this.firstFree();
-      this.seats[t] = { id: user.id, name: user.name, photo: user.photo || null, bot: false, auto: false, offlineSince: 0 };
+      this.seats[t] = { id: user.id, name: user.name, photo: user.photo || null, bot: false, auto: false, offlineSince: 0, joined: ++this.joinSeq };
       this.spectators.delete(uid);
       if (!this.hostId) this.hostId = uid;
       this.fixHost();
@@ -258,7 +262,7 @@
       const t = idx >= 0 ? idx : this.seats.findIndex(function (s) { return s && (s.bot || s.auto); });
       const s = this.seats[t];
       if (!s || !(s.bot || s.auto)) return 'Bu oʻrin band';
-      this.seats[t] = { id: user.id, name: user.name, photo: user.photo || null, bot: false, auto: false, offlineSince: 0 };
+      this.seats[t] = { id: user.id, name: user.name, photo: user.photo || null, bot: false, auto: false, offlineSince: 0, joined: ++this.joinSeq };
       this.spectators.delete(uid);
       if (!this.hostId) this.hostId = uid;
       this.changed();
@@ -351,9 +355,11 @@
     if (!s) return 'Oʻrin topilmadi';
     if (s.bot) { if (!this.canManage(uid)) return 'Botni chiqarish uchun stolda oʻtirgan boʻlishingiz kerak'; }
     else {
+      // Stol egasi istalgan oʻyinchini chiqara oladi — u mehmon (kuzatuvchi) boʻlib qoladi
       if (!this.isHost(uid)) return 'Faqat stol egasi';
-      if (this.isOnline(s.id) && !s.auto) return 'Onlayn oʻyinchini chiqarib boʻlmaydi';
+      if (s.id === uid) return 'Oʻzingizni chiqara olmaysiz — «Stoldan turish»ni bosing';
       if (this.isOnline(s.id)) this.spectators.set(s.id, { id: s.id, name: s.name, photo: s.photo });
+      this.kickedOut = { at: this.now(), id: s.id };
     }
     this.seats[idx] = null;
     this.fixHost();
@@ -657,6 +663,7 @@
         };
       }),
       readyIn: this.readyAt ? Math.max(0, this.readyAt - this.now()) : 0,
+      kickedOut: this.kickedOut && this.kickedOut.id === uid ? this.kickedOut.at : 0,
       readyOut: this.readyOut && this.readyOut.ids.indexOf(uid) >= 0 ? this.readyOut.at : 0,
       score: this.score.slice(),
       lose: E.MATCH_LOSE,
