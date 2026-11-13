@@ -172,32 +172,31 @@ test('Bura: hamma kartasi koʻzir boʻlgan oʻyinchi navbatsiz yuradi', () => {
   assert.equal(own.trick, null);
 });
 
-test('qoʻlda 4 ta tuz — gʻalaba emas (tuzlar yigʻilishi kerak); tarqatishda bitta oʻyinchiga 4 ta tuz tushmaydi', () => {
-  const st = E.newRound({ leader: 0, deck: deckFor(0, [
-    ['6H', '7H', '8H', '9H'], ['AS', 'AH', 'AD', 'AC'], ['6C', '7C', '8C', '9C'], ['JC', 'QC', 'KC', '10C']
-  ], '9D', '6S') });
-  assert.equal(st.phase, 'lead');
-  assert.equal(st.result, null);
+test('tarqatishda bitta oʻyinchiga 4 ta tuz tushmaydi', () => {
   for (let g = 0; g < 3000; g++) {
     const s = E.newRound({ leader: g % 4, rng: rngFrom(9000 + g) });
     assert.ok(!s.hands.some(E.isFourAces), 'tarqatish ' + g);
   }
 });
 
-test('4 ta tuzni yigʻgan jamoa — mutlaq gʻolib', () => {
+test('oʻyin davomida qoʻlida 4 ta tuz yigʻilgan oʻyinchining jamoasi — mutlaq gʻolib (raqibga 14)', () => {
   const st = E.newRound({ leader: 0, rng: rngFrom(5) });
   E.takeEvents(st);
-  st.taken[0] = [{ c: 'AS', up: true }, { c: 'AH', up: false }];
-  st.taken[2] = [{ c: 'AD', up: true }];
+  // 1-oʻrindagi oʻyinchi kolodadan 4-tuzni oldi deb faraz qilamiz
+  const others = [];
+  st.hands.forEach((h, i) => { st.hands[i] = h.filter((c) => { if (E.rankOf(c) === 'A') { others.push(c); return false; } return true; }); });
+  st.stock = st.stock.filter((c) => E.rankOf(c) !== 'A');
+  st.hands[1] = ['AS', 'AH', 'AD'];
+  const top = st.stock.pop();
+  st.stock.push('AC', top); // 0-oʻrin birinchi oladi (top), keyin 1-oʻrin — AC
   st.phase = 'trickEnd';
-  st.trick = { k: 1, plays: [{ seat: 1, cards: ['AC'], up: true }, { seat: 2, cards: ['7C'], up: true }], best: 1, winner: 2 };
-  const evs = E.collect(st);
+  st.trick = { k: 1, plays: [{ seat: 0, cards: ['6S'], up: true }, { seat: 1, cards: ['6H'], up: true }], best: 0, winner: 0 };
+  st.hands[0] = st.hands[0].slice(0, 3); st.hands[2] = st.hands[2].slice(0, 3); st.hands[3] = st.hands[3].slice(0, 3);
+  E.collect(st);
   assert.equal(st.phase, 'roundEnd');
   assert.equal(st.result.type, 'aces');
-  assert.equal(st.result.team, 0);
-  assert.equal(st.result.cards.length, 4);
-  assert.equal(E.resultView(st).via, 'taken');
-  assert.ok(evs.some((e) => e.kind === 'aces' && e.via === 'taken'));
+  assert.equal(st.result.team, 1);
+  assert.equal(st.result.award, 14);
 });
 
 test('koʻp marta toʻliq simulyatsiya: kartalar yoʻqolmaydi, yopiq karta oxirida ochiladi, hisob toʻgʻri', () => {

@@ -27,7 +27,7 @@ const RULES = [
   '<b>Olish:</b> eng kuchli toʻplam egasi hamma kartalarni oladi, birinchi boʻlib kolodadan oladi va yuradi.',
   '',
   '🔥 <b>Bura</b> — qoʻldagi 4 kartaning hammasi koʻzir: navbatsiz yuradi.',
-  '👑 <b>4 ta tuz</b> — 4 ta tuzni yigʻgan jamoa mutlaq gʻolib: raqib jamoa hisobi 14 boʻladi.',
+  '👑 <b>4 ta tuz</b> — qoʻlida 4 ta tuz yigʻilgan oʻyinchining jamoasi mutlaq gʻolib (tarqatishda 4 ta tuz bitta oʻyinchiga tushmaydi): raqib jamoa hisobi 14 boʻladi.',
   '',
   '<b>Hisob:</b> kartalar tugagach jamoa ochkolari sanaladi. 61 va undan koʻp — gʻalaba, 60:60 — durang: hech kimga ball yozilmaydi, keyingi raundda yutqazgan jamoaga yana +2 ball qoʻshiladi. Yurish vaqti tugasa, chap tarafdagi kartalar avtomatik yuriladi. Raundda yutqazgan jamoaga ball yoziladi: 31 va undan koʻp ochko olgan boʻlsa — 2, 31 dan kam — 4, birorta ham karta ololmagan boʻlsa — 6. 14 va undan koʻp ball toʻplagan jamoa matchni yutqazadi. Aynan 12 ballda jamoaga shans beriladi — yana oʻynaydi: yutsa, 12 da qoladi, yana yutqazsa, matchni boy beradi.'
 ].join('\n');

@@ -199,6 +199,11 @@
     st.turn = leader;
     st.phase = 'lead';
     const order = seatsFrom(st.n, leader);
+    // Oʻyin davomida (kolodadan olib) qoʻlida 4 ta tuz yigʻilgan oʻyinchining jamoasi — mutlaq gʻolib.
+    // Tarqatishda esa bitta oʻyinchiga 4 ta tuz tushmaydi (newRound).
+    for (const s of order) {
+      if (isFourAces(st.hands[s])) return endRound(st, { type: 'aces', seat: s, team: teamOf(s), cards: st.hands[s].slice(), via: 'hand' });
+    }
     if (st.hands.every(function (h) { return h.length === 0; })) return endByPoints(st);
     // Bura: hamma kartasi koʻzir boʻlgan oʻyinchi navbatsiz yuradi
     for (const s of order) {
@@ -341,17 +346,6 @@
       }
     }
     ev(st, 'collect', w, { visible: visible, count: count });
-    // 4 ta tuzni yigʻgan jamoa — mutlaq gʻolib
-    const team = teamOf(w);
-    const aces = [];
-    st.taken.forEach(function (pile, s) {
-      if (teamOf(s) === team) pile.forEach(function (x) { if (rankOf(x.c) === 'A') aces.push(x.c); });
-    });
-    if (aces.length === 4) {
-      st.trick = null;
-      endRound(st, { type: 'aces', seat: w, team: team, cards: aces, via: 'taken' });
-      return takeEvents(st);
-    }
     drawUp(st, w);
     st.trickNo++;
     beginTrick(st, w);
