@@ -692,3 +692,12 @@ button.hs:focus-visible { outline: 2px solid #fff; outline-offset: 2px; border-r
 .tc-tools .btn { flex: 1 1 auto; }
 .hall-top .mic { margin-left: auto; margin-right: 8px; }
 .hall-set { padding: 4px 16px 24px; }
+
+/* til almashtirish: UZ | RU */
+.langsw { display: inline-flex; padding: 3px; border-radius: 999px; background: rgba(247, 236, 223, .1); box-shadow: inset 0 0 0 1.5px rgba(247, 236, 223, .2); flex: none; }
+.langsw button { min-width: 40px; min-height: 32px; padding: 0 10px; border: 0; border-radius: 999px; background: transparent; color: var(--muted); font: 700 14px var(--sans); letter-spacing: .04em; cursor: pointer; }
+.langsw button.on { background: var(--saffron); color: #2b1903; }
+.langsw button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.langrow { display: flex; justify-content: flex-end; margin-bottom: 6px; }
+.hall-top .langsw { margin-left: auto; margin-right: 10px; }
+.hall-top .mic + .langsw { margin-left: 0; }

@@ -408,8 +408,18 @@
       '<p class="note">Guruhdagi «Oʻyinga kirish» tugmasi orqali yoki bot menyusidan oching.</p></div>';
   }
 
+  // Til almashtirish: UZ | RU — zal, bosh sahifa va menyuda koʻrinib turadi
+  function langHTML() {
+    if (!window.BuraI18n) return '';
+    const l = window.BuraI18n.lang;
+    return '<div class="langsw" role="group" aria-label="Tilni tanlash" data-noi18n>' +
+      ['uz', 'ru'].map(function (x) {
+        return '<button type="button" data-act="lang" data-l="' + x + '" aria-pressed="' + (l === x) + '"' + (l === x ? ' class="on"' : '') + '>' + x.toUpperCase() + '</button>';
+      }).join('') + '</div>';
+  }
+
   function homeHTML() {
-    return '<div class="lobby">' + heroHTML(true) +
+    return '<div class="lobby"><div class="langrow">' + langHTML() + '</div>' + heroHTML(true) +
       '<p class="tag">2×2 jamoa. Kim 61 ochko yigʻadi?</p>' +
       (S.missing ? '<p class="warn">Bu stol yopilgan yoki topilmadi. Yangi stol oching.</p>' : '') +
       '<div class="lobby-actions">' + btn('create', 'Yangi stol ochish', 'primary', S.busy) + '</div>' +
@@ -496,7 +506,7 @@
     const sorted = inRoom ? list.filter(isMyLobby).concat(list.filter(function (t) { return !isMyLobby(t); })) : list;
     let html = '<div class="hall"><header class="hall-top"><div><h1>Oʻyin zali</h1><small>' +
       esc(h.title ? h.title + ' · ' : '') + (list.length ? list.length + ' ta stol' : 'hozircha stol yoʻq') + '</small></div>' +
-      (inRoom && VC ? micHTML('') : '') + linkBtn('rules', 'Qoidalar') + '</header>';
+      (inRoom && VC ? micHTML('') : '') + langHTML() + linkBtn('rules', 'Qoidalar') + '</header>';
     if (!list.length) html += '<p class="hall-empty">Hali hech kim oʻynamayapti. Birinchi stolni oching — boshqalar uni shu yerda koʻrib, qoʻshiladi.</p>';
     else html += '<p class="hall-hint">Istalgan stoldagi boʻsh oʻringa bosing — oʻsha jamoaga oʻtirasiz. Oʻyin ketayotgan stolni kuzatishingiz mumkin.</p>';
     html += '<div class="tables">' + sorted.map(hallCard).join('') + '</div>';
@@ -1065,7 +1075,7 @@
   }
 
   function menuHTML(r) {
-    let h = '<h2>Hisob</h2><p class="sub">' + (r.round ? r.round + '-raund. Raundda yutqazgan jamoaga ball yoziladi; ' + r.lose + ' ballga yetgan jamoa matchni boy beradi.' : 'Oʻyin hali boshlanmadi') + '</p>' + teamsHTML(r, null);
+    let h = '<div class="langrow">' + langHTML() + '</div><h2>Hisob</h2><p class="sub">' + (r.round ? r.round + '-raund. Raundda yutqazgan jamoaga ball yoziladi; ' + r.lose + ' ballga yetgan jamoa matchni boy beradi.' : 'Oʻyin hali boshlanmadi') + '</p>' + teamsHTML(r, null);
     const note = edgeNote(r);
     if (note) h += '<p class="match edge">' + note + '</p>';
     if (r.drawBonus) h += '<p class="match">Oldingi raund durang: bu raundda yutqazgan jamoaga yana +' + r.drawBonus + ' ball qoʻshiladi.</p>';
@@ -1140,7 +1150,7 @@
     const pts = ['AH', '10H', 'KH', 'QH', 'JH', '9H'];
     return '<h2>Bura qoidalari</h2><p class="sub">2×2 jamoa. Sherigingiz roʻparangizda oʻtiradi, ochkolar jamoaga qoʻshiladi.</p>' +
       '<h3>Kartalar va ochkolar</h3><div class="pointrow">' + pts.map(function (c) { return '<div>' + cardHTML(c, { size: 'xs' }) + E.points(c) + '</div>'; }).join('') + '</div>' +
-      '<p>36 ta karta, jami 120 ochko. Kuch tartibi: T (tuz) › 10 › K › D › V › 9 › 8 › 7 › 6. 10 korolni bosadi, korol 10 ni bosa olmaydi.</p>' +
+      '<p>36 ta karta, jami 120 ochko. Kuch tartibi: T (tuz) › 10 › K › Q › J › 9 › 8 › 7 › 6. 10 korolni bosadi, korol 10 ni bosa olmaydi.</p>' +
       '<h3>Tarqatish va koʻzir</h3><ul class="rules">' +
       '<li>Har kimga 4 tadan karta. Bitta karta koʻzir qilib ochiladi, yana bittasi yopiq turadi.</li>' +
       '<li>Kolodadan avval oddiy kartalar, keyin ochiq koʻzir, eng oxirida yopiq karta olinadi. Yopiq kartani olgan oʻyinchi uni hammaga koʻrsatadi va koʻzir masti shu kartanikiga almashadi.</li>' +
@@ -1210,6 +1220,7 @@
       text = seat % 2 === r.mySeat % 2 ? 'Bura oʻynaymizmi? 🃏 Sherigim boʻling — joy sizni kutyapti!' : 'Bura oʻynaymizmi? 🃏 Raqib boʻlib oʻtiring — joy sizni kutyapti!';
     }
     haptic('light');
+    if (window.BuraI18n) text = window.BuraI18n.t(text);
     const url = 'https://t.me/share/url?url=' + encodeURIComponent(link) + '&text=' + encodeURIComponent(text);
     try { if (TG && TG.isVersionAtLeast('6.1')) { TG.openTelegramLink(url); return; } } catch (e) { /* */ }
     if (navigator.share) { navigator.share({ title: 'Bura', url: link }).catch(function () {}); return; }
@@ -1255,6 +1266,9 @@
         render();
         return send({ t: 'create', bots: act === 'new-bots' }, true);
       case 'invite': return share(Number(el.getAttribute('data-seat')));
+      case 'lang':
+        if (window.BuraI18n) { window.BuraI18n.set(el.getAttribute('data-l')); render(); }
+        return;
       case 'watchers': {
         const w = (S.room && S.room.watchers) || [];
         if (w.length) toast('Kuzatmoqda: ' + nameList(w.map(function (x) { return x.you ? 'siz' : x.name; })));
@@ -1324,6 +1338,7 @@
 
   // ---------- ishga tushirish ----------
   initTelegram();
+  if (window.BuraI18n) window.BuraI18n.start(); // rus tili tanlangan boʻlsa — ekran matnlari tarjima qilinadi
   render();
   if (DEMO) connectLocal(); else connectWS();
 })();

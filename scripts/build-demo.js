@@ -17,6 +17,7 @@ let css = read('public/style.css').replace(/url\('\/fonts\/([^']+)'\)/g, functio
 let html = read('public/index.html')
   .replace(/<!--TG-->[\s\S]*?<!--\/TG-->\n?/, '')
   .replace(/<link rel="stylesheet"[^>]*>/, () => '<style>\n' + css + '\n</style>')
+  .replace(/<script src="\/i18n\.js[^"]*"><\/script>/, () => '<script>\n' + read('public/i18n.js') + '\n</script>')
   .replace(/<script src="\/engine\.js[^"]*"><\/script>/, () => '<script>\n' + read('src/engine.js') + '\n</script>')
   .replace(/<script src="\/room\.js[^"]*"><\/script>/, () => '<script>\n' + read('src/room.js') + '\n</script>')
   .replace(/<script src="\/adpcm\.js[^"]*"><\/script>\n?/, '') // demoda server yoʻq — ovozli chat ham yoʻq
