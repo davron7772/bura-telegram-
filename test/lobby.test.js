@@ -50,7 +50,7 @@ test('yangi stol botsiz: faqat ochgan kishi, oʻyin boshlanmaydi; botlar bilan �
   try {
     const a = await client(h.port, 'a', 'Ali');
     a.hello();
-    await a.next((m) => m.t === 'home', 'bosh sahifa');
+    await a.next((m) => m.t === 'hall', 'bosh sahifa');
     a.send({ t: 'create', bots: false });
     const r = (await a.next((m) => m.t === 'state', 'stol')).room;
     assert.deepEqual(names(r), ['Ali', null, null, null]);
@@ -71,7 +71,7 @@ test('yangi stol botsiz: faqat ochgan kishi, oʻyin boshlanmaydi; botlar bilan �
 
     const b = await client(h.port, 'b', 'Bek');
     b.hello();
-    await b.next((m) => m.t === 'home', 'bosh sahifa');
+    await b.next((m) => m.t === 'hall', 'bosh sahifa');
     b.send({ t: 'create', bots: true });
     const rb = (await b.next((m) => m.t === 'state', 'botli stol')).room;
     assert.notEqual(rb.id, r.id);
@@ -86,7 +86,7 @@ test('taklif havolasi aniq oʻringa oʻtqazadi; oʻrin band boʻlsa — birinchi
   try {
     const a = await client(h.port, 'a', 'Ali');
     a.hello();
-    await a.next((m) => m.t === 'home', 'bosh sahifa');
+    await a.next((m) => m.t === 'hall', 'bosh sahifa');
     a.send({ t: 'create', bots: false });
     const r = (await a.next((m) => m.t === 'state', 'stol')).room;
 

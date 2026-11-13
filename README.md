@@ -73,6 +73,8 @@ HTTPS uchun oldiga Caddy yoki Nginx qoʻying (domen kerak).
 
 Guruhda bitta zal xabari turadi va stollar oʻzgarganda yangilanadi; `/bura` uni chat pastiga qayta chiqaradi (eskisi oʻchadi). Kutayotgan boʻsh stol boʻlmasa, `/bura` yangi stol ham ochadi.
 
+Ilovani botdan (shaxsiy chatdan) ochganda **umumiy zal** chiqadi: guruhsiz ochilgan barcha stollar, istalganiga kirib, boʻsh oʻringa oʻtirish mumkin. Alohida lobbi ekrani yoʻq — stol ochgan kishi zalda oʻz stoli atrofida koʻrinadi, boʻsh oʻrinni bosib bot qoʻshadi yoki doʻstini taklif qiladi; 4 kishi toʻlganda hamma oʻyin ekraniga oʻtadi.
+
 Bot bilan shaxsiy chatda ham `/bura` yozish mumkin — bot havolani doʻstlaringizga yuborish tugmasini beradi.
 
 ## Ovozli chat

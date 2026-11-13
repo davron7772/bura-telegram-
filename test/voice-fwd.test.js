@@ -56,7 +56,7 @@ async function voiceTable(port) {
   for (let i = 0; i < 4; i++) {
     const c = await client(port, 'u' + i, names[i]);
     c.send({ t: 'hello', dev: { id: c.uid, name: c.name }, room: i ? list[0].room.id : undefined });
-    if (!i) { await c.next((m) => m.t === 'home', 'home'); c.send({ t: 'create', bots: false }); }
+    if (!i) { await c.next((m) => m.t === 'hall', 'home'); c.send({ t: 'create', bots: false }); }
     await c.next((m) => m.t === 'state', 'stol');
     list.push(c);
   }

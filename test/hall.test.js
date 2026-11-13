@@ -15,7 +15,7 @@ function startHub(cfg) {
   return new Promise((resolve) => {
     server.listen(0, '127.0.0.1', () => resolve({
       hub, port: server.address().port,
-      stop: () => new Promise((r) => { hub.close(); server.close(r); })
+      stop: () => new Promise((r) => { for (const w of hub.wss.clients) w.terminate(); hub.close(); server.close(r); })
     }));
   });
 }
@@ -160,8 +160,10 @@ test('zal: stollar roʻyxati, oʻtirish, yangi stol, zalga qaytish', { timeout: 
     // Notoʻgʻri kalit — "stol topilmadi"
     const X = await client(srv.port, '9', 'Yot');
     X.send({ t: 'hello', dev: { id: '9', name: 'Yot' }, room: 'gn123x0000000000' });
-    const home = await X.next((m) => m.t === 'home', 'home');
-    assert.equal(home.missing, true);
+    const miss = await X.next((m) => m.t === 'error', 'topilmadi');
+    assert.match(miss.msg, /topilmadi/);
+    const pub = await X.next(isHall(), 'umumiy zal');
+    assert.equal(pub.hall.key, 'gpub');
 
     [A, B, C, D, X].forEach((c) => c.ws.close());
   } finally {

@@ -214,11 +214,15 @@
       setRoom(m.room, m.invite);
     }
     else if (m.t === 'hall') {
-      if (VC) VC.reset();
-      if (S.screen !== 'hall') { S.sheet = null; window.scrollTo(0, 0); }
-      S.screen = 'hall'; S.room = null; S.hall = m.hall; S.busy = false;
-      setClosingConfirm(false);
-      render();
+      S.hall = m.hall; S.busy = false;
+      // out — stoldan chiqib zalga oʻtdik; aks holda stol (lobbi) ichidamiz va zal shunchaki yangilandi
+      if (m.out || !S.room) {
+        if (VC) VC.reset();
+        if (S.screen !== 'hall') { S.sheet = null; window.scrollTo(0, 0); }
+        S.screen = 'hall'; S.room = null;
+        setClosingConfirm(false);
+      }
+      if (S.screen === 'hall' || (S.room && S.room.phase === 'lobby')) render();
     }
     else if (m.t === 'closed') { S.sheet = null; toast(m.why === 'away' ? 'Stol yopildi: oʻyinchilar uzoq vaqt qaytmadi' : 'Stol yopildi: stolda oʻyinchi qolmadi'); }
     else if (m.t === 'home') { if (VC) VC.reset(); S.screen = 'home'; S.room = null; S.missing = !!m.missing; render(); }
@@ -374,7 +378,8 @@
     else if (S.screen === 'auth') html = authHTML();
     else if (S.screen === 'home') html = homeHTML();
     else if (S.screen === 'hall' && S.hall) html = hallHTML(S.hall);
-    else if (S.room) html = S.room.phase === 'lobby' ? lobbyHTML(S.room) : tableHTML(S.room);
+    // Lobbi alohida ekran emas: stollar zali koʻrinadi, oʻzingiz stolingiz atrofida oʻtirasiz
+    else if (S.room) html = S.room.phase === 'lobby' ? (S.hall ? hallHTML(S.hall) : lobbyHTML(S.room)) : tableHTML(S.room);
     syncBackButton();
     if (S.conn !== 'open' && !DEMO && S.screen !== 'loading') html += '<div class="conn">Aloqa uzildi. Qayta ulanmoqda…</div>';
     html += sheetHTML();
@@ -415,9 +420,18 @@
   // ---------- guruh zali: guruhdagi barcha stollar (poker zali kabi) ----------
   const HALL_POS = ['s0', 's1', 's2', 's3']; // 0 — pastda, 1 — chapda, 2 — tepada, 3 — oʻngda: sheriklar roʻparama-roʻpara
 
+  function isMyLobby(t) { return !!(S.room && S.room.id === t.id && t.phase === 'lobby'); }
+
   function hallSeat(t, i) {
     const s = t.seats[i];
     const room = ' data-room="' + esc(t.id) + '" data-seat="' + i + '"';
+    if (isMyLobby(t) && (!s || s.bot)) {
+      // oʻzim turgan stol: boʻsh oʻrin — bot/taklif/oʻtirish, bot — chiqarish
+      if (!s) return '<button type="button" class="hs free ' + HALL_POS[i] + '" data-act="seatmenu" data-seat="' + i + '" aria-label="Boʻsh oʻrin: ' + (i % 2 + 1) + '-jamoa">' +
+        '<span class="hava empty">+</span><small>Boʻsh</small></button>';
+      return '<button type="button" class="hs take ' + HALL_POS[i] + '" data-act="seatmenu" data-seat="' + i + '" aria-label="' + esc(s.name) + ': bot">' +
+        '<span class="hava t' + (i % 2) + '" style="--av:' + AVATAR_BG[i % AVATAR_BG.length] + '">' + iconSvg('i-bot') + '</span><small>' + esc(s.name) + '</small></button>';
+    }
     if (!s) {
       if (t.phase !== 'lobby') return '<div class="hs ' + HALL_POS[i] + '"><span class="hava empty"></span><small>boʻsh</small></div>';
       return '<button type="button" class="hs free ' + HALL_POS[i] + '" data-act="hsit"' + room + ' aria-label="' + t.no + '-stol: ' + (i % 2 + 1) + '-jamoaga oʻtirish"' + (S.busy ? ' disabled' : '') + '>' +
@@ -445,7 +459,9 @@
     const free = t.phase === 'lobby' && t.seats.some(function (s) { return !s; });
     const botSeat = t.phase === 'roundEnd' ? t.seats.findIndex(function (s) { return s && (s.bot || s.auto); }) : -1;
     let action;
-    if (t.mine >= 0) action = btn('henter', 'Stolga qaytish', 'primary sm', S.busy, room);
+    if (isMyLobby(t)) {
+      action = (S.room.mySeat >= 0 ? btn('share', iconSvg('i-send') + 'Taklif', 'primary sm ico', false) : btn('hsit', 'Oʻtirish', 'primary sm', S.busy, room));
+    } else if (t.mine >= 0) action = btn('henter', 'Stolga qaytish', 'primary sm', S.busy, room);
     else if (free) action = btn('hsit', 'Oʻtirish', 'primary sm', S.busy, room);
     else if (botSeat >= 0) action = btn('hsit', 'Bot oʻrniga', 'primary sm', S.busy, room + ' data-seat="' + botSeat + '"');
     else action = btn('henter', 'Kuzatish', 'secondary sm', S.busy, room);
@@ -455,6 +471,18 @@
     const meta = [];
     if (t.spectators) meta.push('👀 ' + t.spectators + ' kuzatmoqda');
     if (t.voice) meta.push('🎙 ' + t.voice);
+    if (isMyLobby(t)) {
+      const r = S.room, need = 4 - t.seats.filter(Boolean).length;
+      meta.unshift(need > 0 ? 'Oʻyin 4 kishi toʻlganda boshlanadi' : 'Hamma joyida — boshlanmoqda…');
+      const tools = [];
+      if (canManage(r) && need > 0) tools.push(btn('fillBots', 'Qolgan ' + need + ' oʻringa bot', 'secondary sm', S.busy));
+      if (r.mySeat >= 0) tools.push(btn('leave', 'Stoldan turish', 'secondary sm', S.busy));
+      return '<article class="tcard mine here">' +
+        '<div class="tc-head"><b>' + t.no + '-stol · sizning stolingiz</b><span class="chip ' + st.cls + '">' + st.text + '</span></div>' +
+        '<div class="felt">' + [2, 1, 3, 0].map(function (i) { return hallSeat(t, i); }).join('') + '<div class="fmid">' + mid + '</div></div>' +
+        '<div class="tc-foot"><span class="meta">' + meta.join(' · ') + '</span>' + action + '</div>' +
+        (tools.length ? '<div class="tc-tools">' + tools.join('') + '</div>' : '') + '</article>';
+    }
     return '<article class="tcard' + (t.mine >= 0 ? ' mine' : '') + '">' +
       '<div class="tc-head"><b>' + t.no + '-stol</b><span class="chip ' + st.cls + '">' + st.text + '</span></div>' +
       '<div class="felt">' + [2, 1, 3, 0].map(function (i) { return hallSeat(t, i); }).join('') + '<div class="fmid">' + mid + '</div></div>' +
@@ -463,14 +491,18 @@
 
   function hallHTML(h) {
     const list = h.tables || [];
+    const inRoom = !!(S.room && S.room.phase === 'lobby');
+    // oʻz stolim birinchi turadi
+    const sorted = inRoom ? list.filter(isMyLobby).concat(list.filter(function (t) { return !isMyLobby(t); })) : list;
     let html = '<div class="hall"><header class="hall-top"><div><h1>Oʻyin zali</h1><small>' +
       esc(h.title ? h.title + ' · ' : '') + (list.length ? list.length + ' ta stol' : 'hozircha stol yoʻq') + '</small></div>' +
-      linkBtn('rules', 'Qoidalar') + '</header>';
-    if (!list.length) html += '<p class="hall-empty">Hali hech kim oʻynamayapti. Birinchi stolni oching — guruhdagilar uni shu yerda koʻrib, qoʻshiladi.</p>';
-    else html += '<p class="hall-hint">Boʻsh oʻringa bosing — oʻsha jamoaga oʻtirasiz. Oʻyin ketayotgan stolni kuzatishingiz mumkin.</p>';
-    html += '<div class="tables">' + list.map(hallCard).join('') + '</div>';
-    html += '<div class="hall-actions">' + btn('hnew', '+ Yangi stol ochish', list.length ? 'secondary wide' : 'primary wide', S.busy) + '</div></div>';
-    return html;
+      (inRoom && VC ? micHTML('') : '') + linkBtn('rules', 'Qoidalar') + '</header>';
+    if (!list.length) html += '<p class="hall-empty">Hali hech kim oʻynamayapti. Birinchi stolni oching — boshqalar uni shu yerda koʻrib, qoʻshiladi.</p>';
+    else html += '<p class="hall-hint">Istalgan stoldagi boʻsh oʻringa bosing — oʻsha jamoaga oʻtirasiz. Oʻyin ketayotgan stolni kuzatishingiz mumkin.</p>';
+    html += '<div class="tables">' + sorted.map(hallCard).join('') + '</div>';
+    html += '<div class="hall-actions">' + btn('hnew', '+ Yangi stol ochish', list.length ? 'secondary wide' : 'primary wide', S.busy) + '</div>';
+    if (inRoom && !DEMO) html += '<div class="hall-set">' + skinToggle() + '</div>';
+    return html + '</div>';
   }
 
   // Telegram'ning «Orqaga» tugmasi guruh stolidan zalga qaytaradi (oʻyin ketayotganda koʻrsatilmaydi)
@@ -479,7 +511,7 @@
     if (!TG || !TG.BackButton) return;
     try { if (!TG.isVersionAtLeast('6.1')) return; } catch (e) { return; }
     const r = S.room;
-    const show = S.screen === 'room' && !!r && !!r.group && !(r.phase === 'playing' && r.mySeat >= 0);
+    const show = S.screen === 'room' && !!r && !!r.group && r.phase !== 'lobby' && !(r.phase === 'playing' && r.mySeat >= 0);
     if (!backBound) {
       backBound = true;
       TG.BackButton.onClick(function () { if (S.room && S.room.group) handle('tohall', null); });
@@ -984,13 +1016,13 @@
 
   // Stoldagi oʻrinni bosganda: boʻsh — oʻtirish / bot / taklif; bot — chiqarish
   function seatSheetHTML(r, i) {
-    if (!(i >= 0 && i < 4) || r.phase === 'lobby') return '';
+    if (!(i >= 0 && i < 4)) return '';
     const s = r.seats[i];
     const role = r.myTeam >= 0 ? (i % 2 === r.myTeam ? 'Sherigingiz oʻrni' : 'Raqib oʻrni') : (i % 2 + 1) + '-jamoa';
     let h = '', b = '';
     if (!s) {
       h = '<h2>Boʻsh oʻrin</h2><p class="sub">' + role + (r.phase === 'playing' ? '. Oʻyin toʻxtagan — oʻrin toʻlgach davom etadi.' : '') + '</p>';
-      if (r.mySeat < 0) b += btn('sit-here', 'Shu oʻringa oʻtirish', 'primary', S.busy, ' data-seat="' + i + '"');
+      if (r.mySeat < 0 || r.phase === 'lobby') b += btn('sit-here', r.mySeat < 0 ? 'Shu oʻringa oʻtirish' : 'Shu oʻringa oʻtish', r.mySeat < 0 ? 'primary' : 'secondary', S.busy, ' data-seat="' + i + '"');
       if (canManage(r)) b += btn('bot-here', iconSvg('i-bot') + 'Bot qoʻshish', r.mySeat < 0 ? 'secondary ico' : 'primary ico', S.busy, ' data-seat="' + i + '"');
       if (!DEMO) b += btn('invite-here', iconSvg('i-send') + 'Doʻstni taklif qilish', 'secondary ico', false, ' data-seat="' + i + '"');
     } else if (s.bot || s.auto) {

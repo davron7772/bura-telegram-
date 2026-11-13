@@ -84,7 +84,7 @@ test('shaxsiy chatda /bura — alohida stol va doʻstlarni chaqirish tugmasi', a
   bot._test.setMe({ id: 99, username: 'BuraTestBot' });
   await bot._test.onUpdate({ update_id: 1, message: { message_id: 5, text: '/bura', chat: { id: 7, type: 'private' }, from: { id: 7, first_name: 'Ali' } } });
   const room = Array.from(hub.rooms.values())[0];
-  assert.equal(room.groupKey, null);
+  assert.equal(room.groupKey, 'gpub'); // shaxsiy chatdan ochilgan stol — umumiy zalda
   const sent = api.calls.find((c) => c.method === 'sendMessage').params;
   assert.equal(sent.reply_markup.inline_keyboard[0][0].url, 'https://t.me/BuraTestBot/bura?startapp=' + room.id);
   assert.match(sent.reply_markup.inline_keyboard[1][0].url, /^https:\/\/t\.me\/share\/url/);

@@ -685,3 +685,10 @@ button.hs:focus-visible { outline: 2px solid #fff; outline-offset: 2px; border-r
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-delay: 0s !important; transition-duration: .01ms !important; }
 }
+
+/* zal: oʻz stolingiz (lobbi oʻrniga) */
+.tcard.here { box-shadow: inset 0 0 0 2px var(--saffron); }
+.tc-tools { display: flex; gap: 8px; padding: 0 12px 12px; flex-wrap: wrap; }
+.tc-tools .btn { flex: 1 1 auto; }
+.hall-top .mic { margin-left: auto; margin-right: 8px; }
+.hall-set { padding: 4px 16px 24px; }

@@ -17,7 +17,7 @@ function startHub() {
   return new Promise((resolve) => {
     server.listen(0, '127.0.0.1', () => resolve({
       hub, port: server.address().port,
-      stop: () => new Promise((r) => { hub.close(); server.close(r); })
+      stop: () => new Promise((r) => { for (const w of hub.wss.clients) w.terminate(); hub.close(); server.close(r); })
     }));
   });
 }
@@ -60,7 +60,7 @@ function client(port, uid, name) {
 async function hello(c, room) {
   const at = c.mark();
   c.send({ t: 'hello', dev: { id: c.uid, name: c.name }, room: room });
-  await c.next((m) => m.t === (room ? 'state' : 'home'), 'hello', at);
+  await c.next((m) => m.t === (room ? 'state' : 'hall'), 'hello', at);
 }
 
 async function table(port, n) {

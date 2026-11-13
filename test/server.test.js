@@ -77,7 +77,7 @@ test('server: 4 kishi bitta stolda toʻliq raund oʻynaydi', { timeout: 90000 },
 
     const A = await client('1', 'Ali');
     A.send({ t: 'hello', dev: { id: '1', name: 'Ali' } });
-    await until(() => A.msgs.some((m) => m.t === 'home'), 2000, 'home');
+    await until(() => A.msgs.some((m) => m.t === 'hall'), 2000, 'zal');
     A.send({ t: 'create' });
     await until(() => A.room, 2000, 'stol yaratildi');
     const id = A.room.id;

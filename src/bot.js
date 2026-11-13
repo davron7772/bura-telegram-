@@ -221,7 +221,7 @@ function createBot(opts) {
 
   // Ilovadan yangi stol ochildi — guruhga xabar beramiz (daqiqada bir martadan koʻp emas)
   bot.onTableCreated = function (room, user) {
-    if (!me || !room.groupKey || room.chatId === 'dev') return;
+    if (!me || !room.groupKey || room.chatId === 'dev' || room.chatId === 'public') return;
     const g = hub.groups.get(room.groupKey);
     if (!g) return;
     const h = halls.get(g.key);
@@ -232,7 +232,7 @@ function createBot(opts) {
 
   // Stol holati oʻzgarganda shaxsiy chatdagi xabarni yangilash (guruh stollari zal xabarida)
   bot.onRoomChange = function (room) {
-    if (room.groupKey) return;
+    if (room.groupKey && room.groupKey !== 'gpub') return; // guruh stollari — zal xabarida
     const t = tables.get(room.id);
     if (!t || t.timer) return;
     t.timer = setTimeout(async function () {
