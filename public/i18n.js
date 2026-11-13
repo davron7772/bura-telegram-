@@ -172,6 +172,8 @@
     'Jamoa olgan:': 'Команда взяла:',
     'Jamoangiz hali karta olmadi': 'Ваша команда ещё не брала карт',
     'Jamoa:': 'Команда:',
+    'Sizda:': 'У вас:',
+    'Olganingiz:': 'Вы взяли:',
     'ochiq ochko': 'открытых очков',
     'Qoʻlingizdagi kartalar': 'Карты у вас в руке',
     '60:60 — durang. Keyingi raundda yutqazganga +': '60:60 — ничья. В следующем раунде проигравшим +',
