@@ -28,6 +28,12 @@
     this.botDelay = o.botDelay || [900, 1500];
     this.collectMs = o.collectMs != null ? o.collectMs : 1900;
     this.autoStartMs = o.autoStartMs != null ? o.autoStartMs : 1800;
+    // «Tayyorman»: hamma oʻtirgach har kim tasdiqlaydi; vaqtida bosmagan — kuzatuvchiga oʻtadi
+    this.requireReady = !!o.requireReady;
+    this.readyMs = o.readyMs != null ? o.readyMs : 15000;
+    this.readyTimer = null;
+    this.readyAt = 0;
+    this.readyOut = null; // { at, ids } — oxirgi marta kuzatuvchiga oʻtkazilganlar
     this.onChange = o.onChange || function () {};
     this.onRoundEnd = o.onRoundEnd || function () {};
     this.onEmpty = o.onEmpty || function () {};  // stolda faol oʻyinchi qolmadi — stol yopiladi
@@ -166,7 +172,7 @@
   };
 
   P.addHuman = function (user, idx) {
-    this.seats[idx] = { id: user.id, name: user.name, photo: user.photo || null, bot: false, auto: false, offlineSince: 0 };
+    this.seats[idx] = { id: user.id, name: user.name, photo: user.photo || null, bot: false, auto: false, offlineSince: 0, ready: false };
     this.spectators.delete(user.id);
     if (!this.hostId) this.hostId = user.id;
     this.checkAutoStart();
@@ -203,6 +209,7 @@
       case 'fillBots': return this.fillBots(uid);
       case 'kick': return this.kick(uid, m.seat);
       case 'start': return this.start(uid);
+      case 'ready': return this.setReady(uid);
       case 'act': return this.act(uid, m.action);
       case 'next': return this.nextRound(uid);
       case 'lobby': return this.backToLobby(uid);
@@ -363,7 +370,9 @@
   };
 
   P.checkAutoStart = function () {
-    if (this.phase !== 'lobby' || this.filled() < SEATS || this.lobbyTimer) return;
+    if (this.phase !== 'lobby' || this.filled() < SEATS) { this.cancelReady(); return; }
+    if (this.requireReady) return this.checkReady();
+    if (this.lobbyTimer) return;
     const self = this;
     this.lobbyTimer = this.setTimer(function () {
       self.lobbyTimer = null;
@@ -373,7 +382,57 @@
       }
     }, this.autoStartMs);
   };
-  P.clearLobbyTimer = function () { if (this.lobbyTimer) { this.clearTimer(this.lobbyTimer); this.lobbyTimer = null; } };
+  P.clearLobbyTimer = function () {
+    if (this.lobbyTimer) { this.clearTimer(this.lobbyTimer); this.lobbyTimer = null; }
+    this.cancelReady();
+  };
+
+  // Hamma oʻtirdi: «Tayyorman» uchun vaqt; hamma tayyor boʻlsa — oʻyin boshlanadi
+  P.checkReady = function () {
+    const self = this;
+    if (this.seats.every(function (s) { return s && (s.bot || s.ready); })) {
+      this.cancelReady();
+      this.beginRound();
+      return;
+    }
+    if (this.readyTimer) return;
+    this.readyAt = this.now() + this.readyMs;
+    this.readyTimer = this.setTimer(function () {
+      self.readyTimer = null;
+      if (!self.destroyed) self.readyTimeout();
+    }, this.readyMs);
+  };
+  P.cancelReady = function () {
+    if (this.readyTimer) this.clearTimer(this.readyTimer);
+    this.readyTimer = null;
+    this.readyAt = 0;
+  };
+  // Vaqtida «Tayyorman» bosmaganlar kuzatuvchi boʻladi (boʻsh oʻringa qayta oʻtira oladi)
+  P.readyTimeout = function () {
+    if (this.phase !== 'lobby') return;
+    const out = [];
+    for (let i = 0; i < SEATS; i++) {
+      const s = this.seats[i];
+      if (!s || s.bot || s.ready) continue;
+      out.push(s.id);
+      this.seats[i] = null;
+      if (this.isOnline(s.id)) this.spectators.set(s.id, { id: s.id, name: s.name, photo: s.photo });
+    }
+    this.readyAt = 0;
+    if (out.length) this.readyOut = { at: this.now(), ids: out };
+    this.fixHost();
+    this.changed();
+  };
+  P.setReady = function (uid) {
+    if (this.phase !== 'lobby') return 'Oʻyin allaqachon boshlangan';
+    const i = this.seatOf(uid);
+    if (i < 0) return 'Siz bu stolda oʻynamayapsiz';
+    if (this.filled() < SEATS) return 'Hali hamma oʻtirmadi';
+    this.seats[i].ready = true;
+    this.checkAutoStart();
+    this.changed();
+    return null;
+  };
 
   P.start = function (uid) {
     if (this.phase !== 'lobby') return 'Oʻyin allaqachon boshlangan';
@@ -386,6 +445,8 @@
 
   P.beginRound = function () {
     this.clearLobbyTimer();
+    this.seats.forEach(function (s) { if (s) s.ready = false; }); // keyingi lobbida yana soʻraladi
+    this.readyOut = null;
     if (this.matchOver) { this.score = [0, 0]; this.drawBonus = 0; this.matchOver = false; this.matchNo++; }
     // birinchi yurish har raundda navbat bilan almashadi
     this.firstLeader = this.firstLeader < 0 ? Math.floor(this.rng() * SEATS) : (this.firstLeader + 1) % SEATS;
@@ -591,9 +652,12 @@
           online: s.bot || self.isOnline(s.id),
           host: s.id === self.hostId,
           you: s.id === uid,
-          team: E.teamOf(i)
+          team: E.teamOf(i),
+          ready: !!(s.bot || s.ready)
         };
       }),
+      readyIn: this.readyAt ? Math.max(0, this.readyAt - this.now()) : 0,
+      readyOut: this.readyOut && this.readyOut.ids.indexOf(uid) >= 0 ? this.readyOut.at : 0,
       score: this.score.slice(),
       lose: E.MATCH_LOSE,
       edge: E.MATCH_EDGE,

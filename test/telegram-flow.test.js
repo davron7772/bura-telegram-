@@ -45,7 +45,7 @@ test('bot: /bura guruhda → zal tugmasi → Telegram foydalanuvchilari stolga o
   const apiPort = mock.address().port;
   const port = 39000 + Math.floor(Math.random() * 900);
   const srv = spawn(process.execPath, [path.join(__dirname, '..', 'server.js')], {
-    env: Object.assign({}, process.env, {
+    env: Object.assign({}, process.env, { READY_CHECK: '0',
       PORT: String(port), BOT_TOKEN: TOKEN, PUBLIC_URL: 'https://bura.example.test', APP_SHORT_NAME: 'bura',
       BOT_MODE: 'polling', DEV_MODE: '0', TELEGRAM_API_ROOT: 'http://127.0.0.1:' + apiPort
     }),

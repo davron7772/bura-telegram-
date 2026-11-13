@@ -93,6 +93,8 @@ class Hub {
       groupKey: g ? g.key : null,
       no: g ? this.freeTableNo(g) : 0,
       turnSeconds: this.cfg.turnSeconds,
+      requireReady: this.cfg.requireReady !== false, // hamma «Tayyorman» bosgach boshlanadi
+      readyMs: this.cfg.readyMs,
       rng: cryptoRng,
       onChange: function (r) { self.broadcast(r); },
       onRoundEnd: function (r) { self.onRoomChange(r, 'roundEnd'); },
@@ -384,8 +386,9 @@ class Hub {
       matchOver: r.matchOver,
       seats: r.seats.map((s) => (s ? {
         name: s.name, photo: s.photo || null, bot: !!s.bot, auto: !!s.auto,
-        online: !!s.bot || r.isOnline(s.id), you: uid != null && s.id === uid
+        online: !!s.bot || r.isOnline(s.id), you: uid != null && s.id === uid, ready: !!(s.bot || s.ready)
       } : null)),
+      readyIn: r.readyAt ? Math.max(0, r.readyAt - r.now()) : 0,
       spectators: r.spectators.size,
       voice: voice,
       mine: uid != null ? r.seatOf(uid) : -1

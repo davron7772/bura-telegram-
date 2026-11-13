@@ -259,6 +259,15 @@
     }
     S.selected = g && g.hand ? S.selected.filter(function (c) { return g.hand.indexOf(c) >= 0; }) : [];
     S.deadlineAt = room.deadlineIn ? Date.now() + room.deadlineIn : 0;
+    S.readyAt = room.readyIn ? Date.now() + room.readyIn : 0;
+    // «Tayyorman» vaqtida bosilmadi — mehmon rejimi
+    if (room.readyOut && room.readyOut !== S.readyOutSeen) {
+      S.readyOutSeen = room.readyOut;
+      toast('Vaqtida «Tayyorman» bosilmadi — siz mehmonsiz. Qayta oʻtirish uchun boʻsh oʻringa bosing.');
+    }
+    // Hamma oʻtirdi — tayyorlikni soʻrash (tebranish bilan)
+    if (room.readyIn && room.mySeat >= 0 && room.seats[room.mySeat] && !room.seats[room.mySeat].ready && !S.readyBuzz) { S.readyBuzz = true; haptic('heavy'); }
+    if (!room.readyIn) S.readyBuzz = false;
     S.deadlineTotal = room.deadlineTotal || 0;
 
     S.eventFresh = false;
@@ -430,6 +439,18 @@
   // ---------- guruh zali: guruhdagi barcha stollar (poker zali kabi) ----------
   const HALL_POS = ['s0', 's1', 's2', 's3']; // 0 — pastda, 1 — chapda, 2 — tepada, 3 — oʻngda: sheriklar roʻparama-roʻpara
 
+  // Hamma oʻtirdi: har kim «Tayyorman» bosadi (15 soniya). Bosmagan — mehmon rejimiga oʻtadi
+  function readyBarHTML(r) {
+    if (!r || r.phase !== 'lobby' || !r.readyIn) return '';
+    const n = r.seats.filter(function (s) { return s && s.ready; }).length;
+    const me = r.mySeat >= 0 ? r.seats[r.mySeat] : null;
+    const left = '<b class="rleft" data-readyleft>' + Math.ceil(r.readyIn / 1000) + '</b>';
+    let h = '<div class="readybar' + (me && !me.ready ? ' ask' : '') + '" role="region" aria-label="Tayyorlik">' + left + '<div class="rtxt">';
+    if (me && !me.ready) h += '<b>Hamma oʻtirdi!</b><small>Tayyorman tugmasini bosing — aks holda mehmon rejimiga oʻtasiz</small></div>' + btn('ready', 'Tayyorman', 'primary', S.busy);
+    else h += '<b>' + (me ? 'Siz tayyorsiz' : 'Oʻyinchilar tayyorlanmoqda') + '</b><small>Tayyor: ' + n + '/4</small></div>';
+    return h + '</div>';
+  }
+
   function isMyLobby(t) { return !!(S.room && S.room.id === t.id && t.phase === 'lobby'); }
 
   function hallSeat(t, i) {
@@ -449,7 +470,8 @@
     }
     const inner = '<span class="hava t' + (i % 2) + (s.online ? '' : ' off') + '" style="--av:' + AVATAR_BG[i % AVATAR_BG.length] + '">' +
       (s.bot ? iconSvg('i-bot') : '<span>' + esc(firstLetter(s.name)) + '</span>' + (s.photo ? '<img src="' + esc(s.photo) + '" alt="" referrerpolicy="no-referrer">' : '')) +
-      '</span><small>' + (s.you ? 'Siz' : esc(s.name)) + (s.auto ? ' · bot' : '') + '</small>';
+      '</span><small>' + (s.you ? 'Siz' : esc(s.name)) + (s.auto ? ' · bot' : '') + '</small>' +
+      (t.readyIn ? '<i class="rdy' + (s.ready ? ' ok' : '') + '" aria-label="' + (s.ready ? 'tayyor' : 'kutilmoqda') + '">' + (s.ready ? '✓' : '…') + '</i>' : '');
     if (t.phase === 'roundEnd' && (s.bot || s.auto) && t.mine < 0) {
       return '<button type="button" class="hs take ' + HALL_POS[i] + '" data-act="hsit"' + room + ' aria-label="' + esc(s.name) + ' oʻrniga oʻtirish"' + (S.busy ? ' disabled' : '') + '>' + inner + '</button>';
     }
@@ -458,7 +480,7 @@
 
   function hallStatus(t) {
     const n = t.seats.filter(Boolean).length;
-    if (t.phase === 'lobby') return n >= 4 ? { cls: 'go', text: 'Boshlanmoqda' } : { cls: 'wait', text: 'Odam kutmoqda · ' + n + '/4' };
+    if (t.phase === 'lobby') return n >= 4 ? { cls: 'go', text: t.readyIn ? 'Tayyorlik · ' + t.seats.filter(function (s) { return s && s.ready; }).length + '/4' : 'Boshlanmoqda' } : { cls: 'wait', text: 'Odam kutmoqda · ' + n + '/4' };
     if (t.phase === 'roundEnd') return { cls: 'pause', text: t.matchOver ? 'Match tugadi' : t.round + '-raund tugadi' };
     return { cls: 'play', text: t.round + '-raund ketmoqda' };
   }
@@ -483,7 +505,7 @@
     if (t.voice) meta.push('🎙 ' + t.voice);
     if (isMyLobby(t)) {
       const r = S.room, need = 4 - t.seats.filter(Boolean).length;
-      meta.unshift(need > 0 ? 'Oʻyin 4 kishi toʻlganda boshlanadi' : 'Hamma joyida — boshlanmoqda…');
+      meta.unshift(need > 0 ? 'Oʻyin 4 kishi toʻlganda boshlanadi' : t.readyIn ? 'Hamma oʻtirdi — «Tayyorman» bosing' : 'Hamma joyida — boshlanmoqda…');
       const tools = [];
       if (canManage(r) && need > 0) tools.push(btn('fillBots', 'Qolgan ' + need + ' oʻringa bot', 'secondary sm', S.busy));
       if (r.mySeat >= 0) tools.push(btn('leave', 'Stoldan turish', 'secondary sm', S.busy));
@@ -512,6 +534,7 @@
     html += '<div class="tables">' + sorted.map(hallCard).join('') + '</div>';
     html += '<div class="hall-actions">' + btn('hnew', '+ Yangi stol ochish', list.length ? 'secondary wide' : 'primary wide', S.busy) + '</div>';
     if (inRoom && !DEMO) html += '<div class="hall-set">' + skinToggle() + '</div>';
+    if (inRoom) html += readyBarHTML(S.room);
     return html + '</div>';
   }
 
@@ -757,9 +780,10 @@
   function handHTML(r) {
     const g = r.game;
     if (!g.hand && !r.seats[0]) return '<div class="hand spect"></div>';
-    if (!g.hand) return '<div class="hand spect" aria-label="' + esc(r.seats[0] ? r.seats[0].name : '') + ': ' + (g.counts[0] || 0) + ' ta karta">' + repeat(backHTML(), g.counts[0] || 0) + '</div>';
+    if (!g.hand) return '<div class="hand spect' + (isActor(g, 0) ? ' myturn' : '') + '" aria-label="' + esc(r.seats[0] ? r.seats[0].name : '') + ': ' + (g.counts[0] || 0) + ' ta karta">' + repeat(backHTML(), g.counts[0] || 0) + '</div>';
     const cards = sortHand(g.hand, g.trump);
-    return '<div class="hand n' + cards.length + '" role="group" aria-label="Qoʻlingizdagi kartalar">' + cards.map(function (c, i) {
+    const myTurn = isActor(g, r.mySeat) ? ' myturn' : '';
+    return '<div class="hand n' + cards.length + myTurn + '" role="group" aria-label="Qoʻlingizdagi kartalar">' + cards.map(function (c, i) {
       const sel = S.selected.indexOf(c) >= 0;
       const fresh = !S.seenHand.has(r.round + ':' + c) && !reduceMotion;
       return cardHTML(c, { tag: 'button', pt: true, cls: (sel ? 'sel' : '') + (fresh ? ' enter' : ''), attrs: ' data-act="card" aria-pressed="' + sel + '" style="--i:' + i + '"' });
@@ -1085,6 +1109,7 @@
         '<p class="vnote">Ovoz imkon boʻlsa toʻgʻridan-toʻgʻri, boʻlmasa server orqali uzatiladi va yozib olinmaydi. Bir-biringizni eshitish uchun hamma 🎙 tugmasini bosishi kerak. Bir xonada oʻtirgan boʻlsangiz, quloqchin taqing — aks holda ovoz qaytadi.</p>';
     }
     if (!DEMO) h += skinToggle();
+    h += readyBarHTML(r);
     h += '<div class="lobby-actions">';
     if (r.group) h += btn('tohall', 'Barcha stollar (zal)', 'secondary');
     h += btn('rules', 'Qoidalar', 'secondary');
@@ -1266,6 +1291,7 @@
         render();
         return send({ t: 'create', bots: act === 'new-bots' }, true);
       case 'invite': return share(Number(el.getAttribute('data-seat')));
+      case 'ready': return send({ t: 'ready' }, true);
       case 'lang':
         if (window.BuraI18n) { window.BuraI18n.set(el.getAttribute('data-l')); render(); }
         return;
@@ -1324,6 +1350,10 @@
   // Navbat taymeri
   function tick() {
     const r = S.room;
+    if (r && r.phase === 'lobby' && S.readyAt) {
+      const sec = Math.max(0, Math.ceil((S.readyAt - Date.now()) / 1000));
+      app.querySelectorAll('[data-readyleft]').forEach(function (el) { if (el.textContent !== String(sec)) el.textContent = sec; });
+    }
     if (!r || r.phase !== 'playing') return;
     const left = S.deadlineAt ? Math.max(0, S.deadlineAt - Date.now()) : 0;
     const p = S.deadlineAt && S.deadlineTotal ? left / S.deadlineTotal : 1;

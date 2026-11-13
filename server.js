@@ -60,6 +60,7 @@ const hub = new Hub({
   botToken: cfg.botToken,
   devMode: cfg.devMode,
   turnSeconds: cfg.turnSeconds,
+  requireReady: process.env.READY_CHECK !== '0', // «Tayyorman» tugmasi (0 — oʻchirish, avtomatik boshlash)
   iceServers: cfg.iceServers,
   turn: turn,
   voiceRelay: cfg.voiceRelay,

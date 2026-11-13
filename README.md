@@ -63,6 +63,8 @@ HTTPS uchun oldiga Caddy yoki Nginx qoʻying (domen kerak).
    - «Yangi stol ochish» — tanlov chiqadi: **«Doʻstlar bilan»** (stol botsiz ochiladi, bot guruhga «… 2-stolni ochdi» deb xabar beradi) yoki **«Botlar bilan»** (boʻsh oʻrinlarga darhol botlar oʻtiradi).
    Jamoalar: 1 va 3-oʻrin, 2 va 4-oʻrin (sherik roʻparada).
    Lobbida har bir boʻsh oʻrin yonida: **«Taklif qilish»** — doʻstingizga aynan shu oʻringa havola (sherik yoki raqib oʻrni), **«Bot»** — stol egasi shu oʻringa bot qoʻyadi, **«Oʻtirish»** — oʻzingiz oʻtirasiz. Oʻyin faqat 4 oʻrin toʻlganda boshlanadi.
+   Hamma oʻtirgach, har bir oʻyinchida **«Tayyorman»** tugmasi chiqadi (15 soniya). Hamma bosgach oʻyin boshlanadi; vaqtida bosmagan oʻyinchi mehmon (kuzatuvchi) boʻladi va boʻsh oʻringa qayta oʻtira oladi. `READY_CHECK=0` — tekshiruvni oʻchirib, avtomatik boshlash.
+   Oʻyin vaqtida navbatdagi oʻyinchining kartalari qizil rangda yonib-oʻchib turadi.
    Oʻyin vaqtida:
    - botni (avatarini) bossangiz — «Stoldan chiqarish»; oʻyin toʻxtaydi, boʻsh joyga odam oʻtirishi yoki yangi bot qoʻshilishi kerak;
    - ☰ → «Stoldan turish»: oʻrin boʻshaydi, siz kuzatuvchi boʻlib qolasiz; boʻsh joyga bot qoʻshish yoki doʻstni taklif qilish mumkin;

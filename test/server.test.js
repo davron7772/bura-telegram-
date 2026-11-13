@@ -12,7 +12,7 @@ const PORT = 38000 + Math.floor(Math.random() * 1000);
 function startServer() {
   return new Promise((resolve, reject) => {
     const p = spawn(process.execPath, [path.join(__dirname, '..', 'server.js')], {
-      env: Object.assign({}, process.env, { PORT: String(PORT), DEV_MODE: '1', BOT_TOKEN: '', PUBLIC_URL: '' }),
+      env: Object.assign({}, process.env, { READY_CHECK: '0', PORT: String(PORT), DEV_MODE: '1', BOT_TOKEN: '', PUBLIC_URL: '' }),
       stdio: ['ignore', 'pipe', 'pipe']
     });
     let out = '';

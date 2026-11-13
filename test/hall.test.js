@@ -10,7 +10,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
 function startHub(cfg) {
   const server = http.createServer();
-  const hub = new Hub(Object.assign({ devMode: true, turnSeconds: 30, botToken: '1:test' }, cfg));
+  const hub = new Hub(Object.assign({ requireReady: false, devMode: true, turnSeconds: 30, botToken: '1:test' }, cfg));
   hub.attach(server);
   return new Promise((resolve) => {
     server.listen(0, '127.0.0.1', () => resolve({

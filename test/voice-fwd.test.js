@@ -12,7 +12,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
 function startHub(cfg) {
   const server = http.createServer();
-  const hub = new Hub(Object.assign({ devMode: true, turnSeconds: 30, iceServers: [{ urls: ['stun:stun.example.org:3478'] }] }, cfg));
+  const hub = new Hub(Object.assign({ requireReady: false, devMode: true, turnSeconds: 30, iceServers: [{ urls: ['stun:stun.example.org:3478'] }] }, cfg));
   hub.attach(server);
   return new Promise((resolve) => {
     server.listen(0, '127.0.0.1', () => resolve({

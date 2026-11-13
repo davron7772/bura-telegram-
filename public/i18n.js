@@ -17,6 +17,7 @@
 
   // Oʻzgaruvchan matnlar (raqam bilan) — avval shular
   const RULES = [
+    [/Tayyorlik · (\d)\/4/g, (m, n) => 'Готовность · ' + n + '/4'],
     [/Hamma (\d+) tadan karta tashlaydi/g, (m, n) => 'Все кладут по ' + n + ' ' + pl(n, 'карте', 'карты', 'карт')],
     [/(\d+) ta karta bilan yurdingiz/g, (m, n) => 'ходите ' + kartI(n)],
     [/(\d+) ta karta bilan yurdi/g, (m, n) => 'ходит ' + kartI(n)],
@@ -378,6 +379,18 @@
     'tuz': 'туз', 'korol': 'король', 'dama': 'дама', 'valet': 'валет', 'oʻnlik': 'десятка', 'toʻqqizlik': 'девятка',
     'sakkizlik': 'восьмёрка', 'yettilik': 'семёрка', 'oltilik': 'шестёрка', 'pika': 'пики', 'chervi': 'черви', 'bubna': 'бубны', 'tref': 'трефы',
     'Tilni tanlash': 'Выбор языка',
+    'Hamma oʻtirdi!': 'Все за столом!',
+    'Hamma oʻtirdi — «Tayyorman» bosing': 'Все сели — нажмите «Готов»',
+    'Tayyorman tugmasini bosing — aks holda mehmon rejimiga oʻtasiz': 'Нажмите «Готов» — иначе станете гостем',
+    'Tayyorman': 'Готов',
+    'Siz tayyorsiz': 'Вы готовы',
+    'Oʻyinchilar tayyorlanmoqda': 'Игроки готовятся',
+    'Tayyor:': 'Готовы:',
+    'Tayyorlik': 'Готовность',
+    'tayyor': 'готов',
+    'kutilmoqda': 'ждём',
+    'Vaqtida «Tayyorman» bosilmadi — siz mehmonsiz. Qayta oʻtirish uchun boʻsh oʻringa bosing.': 'Вы не нажали «Готов» вовремя — теперь вы гость. Чтобы снова сесть, нажмите на свободное место.',
+    'Hali hamma oʻtirmadi': 'Ещё не все сели',
     'ball': 'очков',
     'sherik': 'напарник',
     'sherigingiz': 'напарник',
