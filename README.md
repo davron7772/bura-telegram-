@@ -105,7 +105,7 @@ Saqlang — server qayta ishga tushadi va logda «Ovozli chat: STUN + TURN (…)
 ## Qoidalar (qisqacha)
 
 - 4 oʻyinchi, 2×2 jamoa. Sherigingiz roʻparangizda oʻtiradi, ochkolar jamoaga qoʻshiladi.
-- 36 ta karta. Kuch tartibi: Tuz › 10 › Korol › Dama › Valet › 9 › 8 › 7 › 6. Kartada: **T**, **K**, **D**, **V**.
+- 36 ta karta. Kuch tartibi: Tuz › 10 › Korol › Dama › Valet › 9 › 8 › 7 › 6. Kartada: **T** (tuz), **K** (korol), **Q** (dama), **J** (valet).
 - Ochkolar: Tuz 11, 10 — 10, Korol 4, Dama 3, Valet 2, qolganlari 0. Jami 120.
 - Har kimga 4 tadan karta. Bitta karta koʻzir qilib ochiladi, yana bittasi yopiq turadi. Kolodadan avval oddiy kartalar, keyin ochiq koʻzir, eng oxirida yopiq karta olinadi. Yopiq kartani olgan oʻyinchi uni hammaga koʻrsatadi va **koʻzir masti shu kartanikiga almashadi**.
 - Birinchi yurish har raundda navbat bilan keyingi oʻyinchiga oʻtadi.
@@ -114,11 +114,11 @@ Saqlang — server qayta ishga tushadi va logda «Ovozli chat: STUN + TURN (…)
 - Ura olmasangiz yoki xohlamasangiz, kartalar yopiq beriladi.
 - Eng kuchli toʻplam egasi hamma kartalarni oladi, birinchi boʻlib kolodadan oladi va yuradi.
 - **Bura** — qoʻldagi 4 kartaning hammasi koʻzir: navbatsiz yuradi (dastur buni avtomatik qiladi).
-- **4 ta tuz** — mutlaq gʻalaba (6 ball).
+- **4 ta tuz** — bir oʻyinchining qoʻlida 4 ta tuz chiqsa yoki jamoa 4 ta tuzni yigʻib olsa — mutlaq gʻalaba: raqib jamoa hisobi 14 boʻladi (match tugaydi).
 - Kartalar tugagach jamoa ochkolari sanaladi: 61 va undan koʻp — gʻalaba. 60:60 — durang: hech kimga ball yozilmaydi, keyingi raundda yutqazgan jamoaga yana +2 ball qoʻshiladi (ketma-ket duranglarda — har biri uchun +2).
 - Yurish vaqti tugasa, qoʻldagi chap tarafdagi kartalar avtomatik yuriladi (javobda — chapdan kerakli sondagi kartalar; ura olsa — ochiq, aks holda yopiq).
 - Stolni kuzatayotganlar (mehmonlar) oʻynayotganlarga ham koʻrinadi — stol oʻrtasida, oʻng tomonda.
-- Raundda yutqazgan jamoaga ball yoziladi: 31 va undan koʻp ochko olgan boʻlsa — 2, 31 dan kam — 4, birorta ham karta ololmagan boʻlsa yoki raqibda 4 ta tuz chiqsa — 6.
+- Raundda yutqazgan jamoaga ball yoziladi: 31 va undan koʻp ochko olgan boʻlsa — 2, 31 dan kam — 4, birorta ham karta ololmagan boʻlsa — 6.
 - Ball qancha kam boʻlsa, shuncha yaxshi: 14 va undan koʻp ball toʻplagan jamoa matchni yutqazadi.
 - Aynan 12 ballda jamoaga shans beriladi — yana oʻynaydi. Yutsa, 12 da qoladi va keyingi raund ham shans boʻladi; yana yutqazsa, 14+ ball boʻlib matchni boy beradi.
 

@@ -426,8 +426,11 @@
     // Ball raundda yutqazgan jamoaga yoziladi (qoida — E.addToMatch).
     // 60:60 — hech kimga yozilmaydi; keyingi raundda yutqazgan jamoaga yana +2 qoʻshiladi.
     const draw = r.type === 'draw';
-    const bonus = draw ? 0 : this.drawBonus;
-    const m = E.addToMatch(this.score, r.team, r.award + bonus);
+    const aces = r.type === 'aces';
+    const bonus = draw || aces ? 0 : this.drawBonus;
+    // 4 ta tuz: raqib jamoa hisobi 14 boʻladi (match yutqaziladi)
+    const base = aces ? Math.max(0, E.MATCH_LOSE - this.score[1 - r.team]) : r.award;
+    const m = E.addToMatch(this.score, r.team, base + bonus);
     this.drawBonus = draw ? this.drawBonus + 2 : 0;
     const loser = m.loser, matchLoser = m.matchLoser;
     this.score = m.score;
@@ -438,8 +441,8 @@
     this.phase = 'roundEnd';
     this.lastResult = Object.assign({}, E.resultView(this.game), {
       round: this.round,
-      award: draw ? 0 : r.award + bonus,
-      base: r.award,
+      award: draw ? 0 : base + bonus,
+      base: base,
       bonus: bonus,
       nextBonus: this.drawBonus,
       loser: loser,

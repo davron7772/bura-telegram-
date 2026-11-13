@@ -27,9 +27,9 @@ const RULES = [
   '<b>Olish:</b> eng kuchli toʻplam egasi hamma kartalarni oladi, birinchi boʻlib kolodadan oladi va yuradi.',
   '',
   '🔥 <b>Bura</b> — qoʻldagi 4 kartaning hammasi koʻzir: navbatsiz yuradi.',
-  '👑 <b>4 ta tuz</b> — mutlaq gʻalaba.',
+  '👑 <b>4 ta tuz</b> — qoʻlida 4 ta tuz chiqqan yoki 4 ta tuzni yigʻgan jamoa mutlaq gʻolib: raqib jamoa hisobi 14 boʻladi.',
   '',
-  '<b>Hisob:</b> kartalar tugagach jamoa ochkolari sanaladi. 61 va undan koʻp — gʻalaba, 60:60 — durang: hech kimga ball yozilmaydi, keyingi raundda yutqazgan jamoaga yana +2 ball qoʻshiladi. Yurish vaqti tugasa, chap tarafdagi kartalar avtomatik yuriladi. Raundda yutqazgan jamoaga ball yoziladi: 31 va undan koʻp ochko olgan boʻlsa — 2, 31 dan kam — 4, birorta ham karta ololmagan boʻlsa yoki raqibda 4 ta tuz chiqsa — 6. 14 va undan koʻp ball toʻplagan jamoa matchni yutqazadi. Aynan 12 ballda jamoaga shans beriladi — yana oʻynaydi: yutsa, 12 da qoladi, yana yutqazsa, matchni boy beradi.'
+  '<b>Hisob:</b> kartalar tugagach jamoa ochkolari sanaladi. 61 va undan koʻp — gʻalaba, 60:60 — durang: hech kimga ball yozilmaydi, keyingi raundda yutqazgan jamoaga yana +2 ball qoʻshiladi. Yurish vaqti tugasa, chap tarafdagi kartalar avtomatik yuriladi. Raundda yutqazgan jamoaga ball yoziladi: 31 va undan koʻp ochko olgan boʻlsa — 2, 31 dan kam — 4, birorta ham karta ololmagan boʻlsa — 6. 14 va undan koʻp ball toʻplagan jamoa matchni yutqazadi. Aynan 12 ballda jamoaga shans beriladi — yana oʻynaydi: yutsa, 12 da qoladi, yana yutqazsa, matchni boy beradi.'
 ].join('\n');
 
 const HELP = [
@@ -87,7 +87,8 @@ function createBot(opts) {
       case 'win': return '🏆 ' + (r.team + 1) + '-jamoa yutdi: ' + r.points[r.team] + ' ochko (' + (2 - r.team) + '-jamoaga +' + r.award + ' ball)';
       case 'aces': {
         const s = room.seats[r.seat];
-        return '👑 4 ta tuz! ' + (s ? esc(s.name) : '') + ' — ' + (r.team + 1) + '-jamoa yutdi (' + (2 - r.team) + '-jamoaga +' + r.award + ' ball)';
+        return '👑 4 ta tuz! ' + (r.via === 'taken' ? (r.team + 1) + '-jamoa 4 ta tuzni yigʻdi' : (s ? esc(s.name) : '') + ' — ' + (r.team + 1) + '-jamoa yutdi') +
+          ' (' + (2 - r.team) + '-jamoa hisobi 14 — match tugadi)';
       }
       default: return '🤝 60:60 — durang, ball yozilmadi (keyingi raundda yutqazganga +' + (r.nextBonus || 2) + ')';
     }

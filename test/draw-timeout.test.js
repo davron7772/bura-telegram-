@@ -119,3 +119,13 @@ test('kuzatuvchilar oʻynayotganlarga koʻrinadi', () => {
   assert.deepEqual(snap.watchers.map((w) => w.name), ['Oʻyinchi 5', 'Oʻyinchi 6']);
   assert.equal(r.snapshot('u5').watchers.find((w) => w.you).name, 'Oʻyinchi 5');
 });
+
+test('4 ta tuz: raqib jamoa hisobi 14 boʻladi — match tugaydi', () => {
+  const { r } = playingRoom();
+  r.score = [4, 6];
+  r.drawBonus = 2;
+  const res = finish(r, { type: 'aces', team: 0, award: 14, cards: ['AS', 'AH', 'AD', 'AC'], via: 'taken' });
+  assert.deepEqual(r.score, [4, 14]);
+  assert.equal(res.award, 8);
+  assert.equal(res.matchLoser, 1);
+});

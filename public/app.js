@@ -35,7 +35,7 @@
   const reduceMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
 
   // Kartadagi belgilar: Tuz, Korol, Dama, Valet
-  const RANK = { A: 'T', K: 'K', Q: 'D', J: 'V', '10': '10', '9': '9', '8': '8', '7': '7', '6': '6' };
+  const RANK = { A: 'T', K: 'K', Q: 'Q', J: 'J', '10': '10', '9': '9', '8': '8', '7': '7', '6': '6' };
   const RANK_NAME = { A: 'tuz', K: 'korol', Q: 'dama', J: 'valet', '10': 'oʻnlik', '9': 'toʻqqizlik', '8': 'sakkizlik', '7': 'yettilik', '6': 'oltilik' };
   const SUIT_NAME = { S: 'pika', H: 'chervi', D: 'bubna', C: 'tref' };
   const SUIT_CHAR = { S: '♠\uFE0E', H: '♥\uFE0E', D: '♦\uFE0E', C: '♣\uFE0E' };
@@ -707,7 +707,7 @@
       case 'collect': return v(ev.count + ' ta kartani oldi', ev.count + ' ta kartani oldingiz');
       case 'reveal': return v('yopiq kartani oldi: ', 'yopiq kartani oldingiz: ') + cardText(ev.card) + (ev.from !== ev.to ? '. Koʻzir endi ' + suitInline(ev.to) : '. Koʻzir oʻzgarmadi');
       case 'win': return esc(teamName(r, ev.team)) + ' yutdi: ' + ev.points[ev.team] + ' ochko';
-      case 'aces': return '4 ta tuz! ' + v('mutlaq yutdi', 'mutlaq yutdingiz');
+      case 'aces': return '4 ta tuz! ' + (ev.via === 'taken' ? esc(teamName(r, ev.team)) + ' 4 ta tuzni yigʻdi — mutlaq gʻalaba' : v('mutlaq yutdi', 'mutlaq yutdingiz'));
       case 'draw': return '60:60 — durang';
       case 'resume': return 'Oʻyin davom etmoqda';
     }
@@ -1109,7 +1109,8 @@
         big = true;
         title = '4 ta tuz!';
         cards = '<div class="reveal">' + res.cards.map(function (c) { return cardHTML(c, { size: 'xs' }); }).join('') + '</div>';
-        sub = esc(seatName(r, res.seat)) + ' — ' + esc(teamName(r, res.team)).toLowerCase() + ' mutlaq yutdi. ' + pen;
+        sub = (res.via === 'taken' ? esc(teamName(r, res.team)) + ' 4 ta tuzni yigʻib oldi — mutlaq gʻalaba. '
+          : esc(seatName(r, res.seat)) + ' — ' + esc(teamName(r, res.team)).toLowerCase() + ' mutlaq yutdi. ') + pen;
       } else {
         title = !mine ? (res.team + 1) + '-jamoa yutdi' : ours ? 'Siz yutdingiz!' : 'Raqiblar yutdi';
         sub = pen;
@@ -1152,11 +1153,11 @@
       '<li>Eng kuchli toʻplam egasi hamma kartalarni oladi, birinchi boʻlib kolodadan oladi va yuradi.</li></ul>' +
       '<h3>Kombinatsiyalar</h3><ul class="rules">' +
       '<li><b>Bura</b> — qoʻldagi 4 kartaning hammasi koʻzir: navbatsiz yuradi.</li>' +
-      '<li><b>4 ta tuz</b> — mutlaq gʻalaba.</li></ul>' +
+      '<li><b>4 ta tuz</b> — qoʻlida 4 ta tuz chiqqan yoki 4 ta tuzni yigʻib olgan jamoa mutlaq gʻolib: raqib jamoa hisobi 14 boʻladi va match tugaydi.</li></ul>' +
       '<h3>Hisob</h3><ul class="rules">' +
       '<li>Kartalar tugagach jamoa ochkolari sanaladi: 61 va undan koʻp — gʻalaba. 60:60 — durang: hech kimga ball yozilmaydi, keyingi raundda yutqazgan jamoaga yana +2 ball qoʻshiladi.</li>' +
       '<li>Yurish vaqti tugasa, qoʻlingizdagi chap tarafdagi kartalar avtomatik yuriladi.</li>' +
-      '<li>Raundda yutqazgan jamoaga ball yoziladi: 31 va undan koʻp ochko olgan boʻlsa — 2, 31 dan kam — 4, birorta ham karta ololmagan boʻlsa yoki raqibda 4 ta tuz chiqsa — 6.</li>' +
+      '<li>Raundda yutqazgan jamoaga ball yoziladi: 31 va undan koʻp ochko olgan boʻlsa — 2, 31 dan kam — 4, birorta ham karta ololmagan boʻlsa — 6.</li>' +
       '<li>Ball qancha kam boʻlsa, shuncha yaxshi: 14 va undan koʻp ball toʻplagan jamoa matchni yutqazadi.</li>' +
       '<li>Aynan 12 ballda jamoaga shans beriladi — yana oʻynaydi. Yutsa, 12 da qoladi; yana yutqazsa, matchni boy beradi.</li>' +
       '<li>Har yurishga vaqt beriladi — tugasa, avtomatik yuriladi.</li></ul>' +

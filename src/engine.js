@@ -259,7 +259,7 @@
   // Raundda yutqazgan jamoaga yoziladigan ball
   function awardFor(st, r) {
     if (r.type === 'draw') return 0;
-    if (r.type === 'aces') return 6;
+    if (r.type === 'aces') return MATCH_LOSE; // raqib jamoaga 14 — match tugaydi
     const lose = 1 - r.team;
     if (!teamKnown(st, lose).cards) return 6;
     return r.points[lose] < 31 ? 4 : 2;
@@ -272,7 +272,7 @@
     r.totals = st.taken.map(function (_, s) { return seatPoints(st, s); });
     r.award = awardFor(st, r);
     st.result = r;
-    ev(st, r.type, r.seat, { team: r.team, points: r.points.slice(), award: r.award });
+    ev(st, r.type, r.seat, { team: r.team, points: r.points.slice(), award: r.award, via: r.via });
   }
 
   function fail(msg) { return { ok: false, error: msg }; }
@@ -340,6 +340,17 @@
       }
     }
     ev(st, 'collect', w, { visible: visible, count: count });
+    // 4 ta tuzni yigʻgan jamoa — mutlaq gʻolib
+    const team = teamOf(w);
+    const aces = [];
+    st.taken.forEach(function (pile, s) {
+      if (teamOf(s) === team) pile.forEach(function (x) { if (rankOf(x.c) === 'A') aces.push(x.c); });
+    });
+    if (aces.length === 4) {
+      st.trick = null;
+      endRound(st, { type: 'aces', seat: w, team: team, cards: aces, via: 'taken' });
+      return takeEvents(st);
+    }
     drawUp(st, w);
     st.trickNo++;
     beginTrick(st, w);
@@ -427,7 +438,7 @@
     const r = st.result;
     if (!r) return null;
     const o = { type: r.type, seat: r.seat, team: r.team, points: r.points.slice(), totals: r.totals.slice(), award: r.award };
-    if (r.type === 'aces') o.cards = r.cards.slice();
+    if (r.type === 'aces') { o.cards = r.cards.slice(); o.via = r.via || 'hand'; }
     return o;
   }
 
