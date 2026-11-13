@@ -92,12 +92,28 @@ class Hub {
       turnSeconds: this.cfg.turnSeconds,
       rng: cryptoRng,
       onChange: function (r) { self.broadcast(r); },
-      onRoundEnd: function (r) { self.onRoomChange(r, 'roundEnd'); }
+      onRoundEnd: function (r) { self.onRoomChange(r, 'roundEnd'); },
+      onEmpty: function (r, why) { self.closeRoom(r, why); }
     });
     this.rooms.set(id, room);
     this.conns.set(id, new Set());
     if (g) { g.rooms.add(id); this.hallChanged(g); }
     return room;
+  }
+
+  // Stolda faol oʻyinchi qolmadi — stol yopiladi; kuzatuvchilar zalga (yoki bosh sahifaga) qaytadi
+  closeRoom(room, why) {
+    if (!this.rooms.has(room.id)) return;
+    const g = room.groupKey ? this.groups.get(room.groupKey) : null;
+    const conns = Array.from(this.conns.get(room.id) || []);
+    console.log('[stol] ' + room.id + ' yopildi: ' + (why === 'away' ? 'oʻyinchilar uzoq vaqt oflayn' : 'oʻyinchilar qolmadi'));
+    this.removeRoom(room);
+    for (const c of conns) {
+      c.voice = null; c.fwd = null; c.room = null;
+      this.send(c, { t: 'closed', why: why || 'empty' });
+      if (g && this.groups.has(g.key)) this.enterHall(c, g);
+      else this.send(c, { t: 'home', missing: false });
+    }
   }
 
   removeRoom(room) {
@@ -375,7 +391,9 @@ class Hub {
     if (c.hall) { c.hall.subs.delete(c); c.hall = null; }
   }
 
-  // Stoldan chiqib ketish: lobbida oʻrin darhol boʻshaydi, oʻyin paytida esa saqlanadi
+  // Zalga oʻtish: lobbida oʻrin darhol boʻshaydi; oʻyin paytida oʻrin saqlanadi (vaqti tugasa avtomatik yuriladi,
+  // zaldan «Stolga qaytish» mumkin). Stoldagi hamma odam 90 soniya qaytmasa — stol yopiladi (Room.checkEmpty).
+  // Oʻrinni butunlay boʻshatish — «Stoldan turish».
   leaveRoomFor(c) {
     const r = c.room;
     if (!r) return;

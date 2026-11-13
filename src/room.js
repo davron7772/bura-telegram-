@@ -30,6 +30,10 @@
     this.autoStartMs = o.autoStartMs != null ? o.autoStartMs : 1800;
     this.onChange = o.onChange || function () {};
     this.onRoundEnd = o.onRoundEnd || function () {};
+    this.onEmpty = o.onEmpty || function () {};  // stolda faol oʻyinchi qolmadi — stol yopiladi
+    this.emptyMs = o.emptyMs != null ? o.emptyMs : 2500;        // hamma turib ketsa
+    this.awayMs = o.awayMs != null ? o.awayMs : 90000;          // hamma oflayn boʻlsa (ilova yopilgan)
+    this.resumeMs = o.resumeMs != null ? o.resumeMs : 30000;    // davom/yangidan tanlovi — shundan keyin davom etadi
 
     this.seats = [null, null, null, null]; // {id, name, photo, bot, auto, offlineSince}; 0 va 2 — 1-jamoa, 1 va 3 — 2-jamoa
     this.spectators = new Map();
@@ -53,6 +57,11 @@
     this.deadline = 0;
     this.deadlineTotal = 0;
     this.botSeq = 0;
+    this.resumeAsk = false;   // oʻyin oʻrtasida boʻshagan oʻrin toʻldi: stol egasi davom ettirish yoki yangidan boshlashni tanlaydi
+    this.resumeAt = 0;
+    this.resumeTimer = null;
+    this.emptyTimer = null;
+    this.emptyKind = '';
     this.lastActive = this.now();
     this.createdAt = this.now();
     this.destroyed = false;
@@ -67,7 +76,31 @@
   P.isOnline = function (uid) { return (this.online.get(uid) || 0) > 0; };
   P.onlineCount = function () { let n = 0; this.online.forEach(function (v) { if (v > 0) n++; }); return n; };
   P.touch = function () { this.lastActive = this.now(); };
-  P.changed = function () { this.touch(); if (!this.destroyed) this.onChange(this); };
+  P.changed = function () { this.touch(); if (!this.destroyed) { this.checkEmpty(); this.onChange(this); } };
+  // Oʻyin oʻrtasida oʻrin boʻsh — oʻyin toʻxtaydi (kimdir oʻtirguncha yoki bot qoʻshilguncha)
+  P.paused = function () { return this.phase === 'playing' && this.filled() < SEATS; };
+  P.frozen = function () { return this.paused() || this.resumeAsk; };
+
+  // Stolda faol oʻyinchi qolmasa — yopiladi. Hamma turib ketsa — darhol; hamma oflayn boʻlsa — kutib turib.
+  P.checkEmpty = function () {
+    const self = this;
+    const humans = this.seats.filter(function (s) { return s && !s.bot; });
+    const active = humans.some(function (s) { return !s.auto && self.isOnline(s.id); });
+    let kind = '';
+    if (!humans.length) {
+      // lobbida hech kim yoʻq va bot ham yoʻq — bu yangi/boʻsh stol, zal oʻzi tozalaydi
+      if (this.phase !== 'lobby' || this.seats.some(function (s) { return s && s.bot; })) kind = 'empty';
+    } else if (!active && this.phase !== 'lobby') kind = 'away';
+    if (kind === this.emptyKind) return;
+    if (this.emptyTimer) this.clearTimer(this.emptyTimer);
+    this.emptyTimer = null;
+    this.emptyKind = kind;
+    if (!kind) return;
+    this.emptyTimer = this.setTimer(function () {
+      self.emptyTimer = null;
+      if (!self.destroyed) self.onEmpty(self, kind);
+    }, kind === 'empty' ? this.emptyMs : this.awayMs);
+  };
   P.isHost = function (uid) { return uid != null && uid === this.hostId; };
   P.humans = function () { return this.seats.filter(function (s) { return s && !s.bot; }); };
 
@@ -156,9 +189,8 @@
 
   P.destroy = function () {
     this.destroyed = true;
-    if (this.timer) this.clearTimer(this.timer);
-    if (this.lobbyTimer) this.clearTimer(this.lobbyTimer);
-    this.timer = this.lobbyTimer = null;
+    [this.timer, this.lobbyTimer, this.resumeTimer, this.emptyTimer].forEach((h) => { if (h) this.clearTimer(h); });
+    this.timer = this.lobbyTimer = this.resumeTimer = this.emptyTimer = null;
   };
 
   // ---------- mijoz buyruqlari ----------
@@ -175,6 +207,7 @@
       case 'next': return this.nextRound(uid);
       case 'lobby': return this.backToLobby(uid);
       case 'setting': return this.setSetting(uid, m.key, m.value);
+      case 'resume': return this.resume(uid, m.mode);
     }
     return 'Nomaʼlum buyruq';
   };
@@ -195,6 +228,17 @@
     }
     const user = this.spectators.get(uid);
     if (!user) return 'Avval stolga kiring';
+    // Oʻyin oʻrtasida yoki raund oxirida boʻsh oʻringa oʻtirish
+    if (this.phase !== 'lobby' && (idx >= 0 ? !this.seats[idx] : this.firstFree() >= 0)) {
+      const t = idx >= 0 ? idx : this.firstFree();
+      this.seats[t] = { id: user.id, name: user.name, photo: user.photo || null, bot: false, auto: false, offlineSince: 0 };
+      this.spectators.delete(uid);
+      if (!this.hostId) this.hostId = uid;
+      this.fixHost();
+      this.seatFilled();
+      this.changed();
+      return null;
+    }
     if (this.phase === 'lobby') {
       const t = idx >= 0 ? idx : this.firstFree();
       if (t < 0) return 'Boʻsh oʻrin yoʻq';
@@ -220,52 +264,102 @@
     const i = this.seatOf(uid);
     if (i < 0) return null;
     const s = this.seats[i];
-    if (this.phase === 'lobby') {
-      this.seats[i] = null;
-      if (this.isOnline(uid)) this.spectators.set(uid, { id: uid, name: s.name, photo: s.photo });
-      this.fixHost();
-      this.clearLobbyTimer();
-    } else {
-      s.auto = true; // oʻrniga kompyuter oʻynaydi
-      this.fixHost();
-      this.reschedule();
-    }
+    // Stoldan turish: oʻrin boʻshaydi, oʻzi kuzatuvchi boʻlib qoladi.
+    // Oʻyin oʻrtasida boʻlsa — oʻyin toʻxtaydi, boʻsh oʻringa kimdir oʻtirguncha yoki bot qoʻshilguncha.
+    this.seats[i] = null;
+    if (this.isOnline(uid)) this.spectators.set(uid, { id: uid, name: s.name, photo: s.photo });
+    this.fixHost();
+    this.clearLobbyTimer();
+    this.cancelResume();
+    this.reschedule();
     this.changed();
     return null;
   };
 
+  // Boʻshagan oʻrin toʻldi: oʻyin oʻrtasida boʻlsa — stol egasidan soʻraladi (davom ettirish yoki yangidan)
+  P.seatFilled = function () {
+    if (this.phase === 'lobby') { this.checkAutoStart(); return; }
+    if (this.phase !== 'playing' || this.filled() < SEATS || this.resumeAsk) { this.reschedule(); return; }
+    const self = this;
+    this.resumeAsk = true;
+    this.resumeAt = this.now() + this.resumeMs;
+    if (this.resumeTimer) this.clearTimer(this.resumeTimer);
+    this.resumeTimer = this.setTimer(function () {
+      self.resumeTimer = null;
+      if (self.resumeAsk && !self.destroyed) { self.doResume('continue'); self.changed(); }
+    }, this.resumeMs);
+    this.reschedule();
+  };
+  P.cancelResume = function () {
+    this.resumeAsk = false;
+    if (this.resumeTimer) this.clearTimer(this.resumeTimer);
+    this.resumeTimer = null;
+  };
+  P.resume = function (uid, mode) {
+    if (!this.resumeAsk) return 'Hozir tanlash kerak emas';
+    if (!this.isHost(uid)) return 'Faqat stol egasi tanlaydi';
+    this.doResume(mode === 'restart' ? 'restart' : 'continue');
+    this.changed();
+    return null;
+  };
+  P.doResume = function (mode) {
+    this.cancelResume();
+    if (mode === 'restart') {
+      // Yangidan: hisob 0:0, kartalar qayta tarqatiladi
+      this.score = [0, 0];
+      this.drawBonus = 0;
+      this.matchOver = false;
+      this.matchNo++;
+      this.round = 0;
+      this.beginRound();
+      this.lastEvent = Object.assign({}, this.lastEvent, { restart: true });
+    } else {
+      this.setEvents([{ n: 0, kind: 'resume', seat: -1 }]);
+      this.reschedule();
+    }
+  };
+
   P.addBot = function (uid, seatIdx) {
-    if (this.phase !== 'lobby') return 'Botni faqat lobbida qoʻshish mumkin';
-    if (!this.isHost(uid)) return 'Faqat stol egasi bot qoʻsha oladi';
+    if (!this.canManage(uid)) return 'Bot qoʻshish uchun stolda oʻtirgan boʻlishingiz kerak';
     const t = typeof seatIdx === 'number' && seatIdx >= 0 && seatIdx < SEATS && !this.seats[seatIdx] ? seatIdx : this.firstFree();
     if (t < 0) return 'Boʻsh oʻrin yoʻq';
     this.seats[t] = this.makeBot();
-    this.checkAutoStart();
+    this.seatFilled();
     this.changed();
     return null;
   };
 
   P.fillBots = function (uid) {
-    if (this.phase !== 'lobby') return 'Faqat lobbida mumkin';
-    if (!this.isHost(uid)) return 'Faqat stol egasi';
+    if (!this.canManage(uid)) return 'Bot qoʻshish uchun stolda oʻtirgan boʻlishingiz kerak';
     if (this.firstFree() < 0) return 'Boʻsh oʻrin yoʻq';
     for (let i = 0; i < SEATS; i++) if (!this.seats[i]) this.seats[i] = this.makeBot();
-    this.checkAutoStart();
+    this.seatFilled();
     this.changed();
     return null;
   };
 
+  // Botni stoldan chiqarish (stolda oʻtirgan har kim); oflayn odamni — faqat stol egasi
   P.kick = function (uid, idx) {
-    if (this.phase !== 'lobby') return 'Faqat lobbida mumkin';
-    if (!this.isHost(uid)) return 'Faqat stol egasi';
     const s = this.seats[idx];
     if (!s) return 'Oʻrin topilmadi';
-    if (!s.bot && this.isOnline(s.id)) return 'Onlayn oʻyinchini chiqarib boʻlmaydi';
+    if (s.bot) { if (!this.canManage(uid)) return 'Botni chiqarish uchun stolda oʻtirgan boʻlishingiz kerak'; }
+    else {
+      if (!this.isHost(uid)) return 'Faqat stol egasi';
+      if (this.isOnline(s.id) && !s.auto) return 'Onlayn oʻyinchini chiqarib boʻlmaydi';
+      if (this.isOnline(s.id)) this.spectators.set(s.id, { id: s.id, name: s.name, photo: s.photo });
+    }
     this.seats[idx] = null;
     this.fixHost();
     this.clearLobbyTimer();
+    this.cancelResume();
+    this.reschedule();
     this.changed();
     return null;
+  };
+  // Stolda oʻtirgan (bot oʻynamayotgan) odam
+  P.canManage = function (uid) {
+    const i = this.seatOf(uid);
+    return i >= 0 && !this.seats[i].auto;
   };
 
   P.checkAutoStart = function () {
@@ -307,6 +401,8 @@
 
   P.act = function (uid, action) {
     if (this.phase !== 'playing' || !this.game) return 'Oʻyin ketmayapti';
+    if (this.paused()) return 'Oʻyin toʻxtatilgan — boʻsh oʻrin bor';
+    if (this.resumeAsk) return 'Stol egasi tanlamoqda: davom ettirish yoki yangidan';
     const i = this.seatOf(uid);
     if (i < 0) return 'Siz bu stolda oʻynamayapsiz';
     if (!action || typeof action !== 'object') return 'Notoʻgʻri harakat';
@@ -363,6 +459,7 @@
     if (this.phase !== 'roundEnd') return 'Raund hali tugamagan';
     const i = this.seatOf(uid);
     if (i < 0 || this.seats[i].auto) return 'Faqat oʻyinchilar davom ettira oladi';
+    if (this.filled() < SEATS) return 'Boʻsh oʻrin bor — avval kimdir oʻtirsin yoki bot qoʻshing';
     this.beginRound();
     this.changed();
     return null;
@@ -406,7 +503,7 @@
     this.timer = null;
     this.deadline = 0;
     this.deadlineTotal = 0;
-    if (this.destroyed || this.phase !== 'playing' || !this.game) return;
+    if (this.destroyed || this.phase !== 'playing' || !this.game || this.frozen()) return;
     const g = this.game, self = this;
     if (g.phase === 'trickEnd') {
       this.timer = this.setTimer(function () { self.step('collect'); }, this.collectMs);
@@ -476,6 +573,10 @@
         return { name: w.name, photo: w.photo || null, you: w.id === uid };
       }),
       drawBonus: this.drawBonus,
+      paused: this.paused(),
+      resumeAsk: this.resumeAsk,
+      resumeIn: this.resumeAsk ? Math.max(0, this.resumeAt - this.now()) : 0,
+      resumeId: this.resumeAsk ? this.resumeAt : 0,
       settings: Object.assign({}, this.settings),
       seats: this.seats.map(function (s, i) {
         if (!s) return null;

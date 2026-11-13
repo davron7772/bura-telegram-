@@ -63,6 +63,12 @@ HTTPS uchun oldiga Caddy yoki Nginx qoʻying (domen kerak).
    - «Yangi stol ochish» — tanlov chiqadi: **«Doʻstlar bilan»** (stol botsiz ochiladi, bot guruhga «… 2-stolni ochdi» deb xabar beradi) yoki **«Botlar bilan»** (boʻsh oʻrinlarga darhol botlar oʻtiradi).
    Jamoalar: 1 va 3-oʻrin, 2 va 4-oʻrin (sherik roʻparada).
    Lobbida har bir boʻsh oʻrin yonida: **«Taklif qilish»** — doʻstingizga aynan shu oʻringa havola (sherik yoki raqib oʻrni), **«Bot»** — stol egasi shu oʻringa bot qoʻyadi, **«Oʻtirish»** — oʻzingiz oʻtirasiz. Oʻyin faqat 4 oʻrin toʻlganda boshlanadi.
+   Oʻyin vaqtida:
+   - botni (avatarini) bossangiz — «Stoldan chiqarish»; oʻyin toʻxtaydi, boʻsh joyga odam oʻtirishi yoki yangi bot qoʻshilishi kerak;
+   - ☰ → «Stoldan turish»: oʻrin boʻshaydi, siz kuzatuvchi boʻlib qolasiz; boʻsh joyga bot qoʻshish yoki doʻstni taklif qilish mumkin;
+   - kuzatuvchi boʻsh oʻrinni bosib oʻtiradi va oʻsha oʻrindagi kartalarni oladi;
+   - oʻrin toʻlgach, stol egasi tanlaydi: «Davom ettirish» yoki «Yangidan boshlash» (hisob 0:0); tanlamasa, 30 soniyadan keyin oʻyin davom etadi;
+   - stolda birorta ham odam qolmasa, stol yopiladi; hamma odam oflayn boʻlib, 90 soniya qaytmasa ham yopiladi.
 4. Stoldan zalga qaytish: lobbidagi «← Barcha stollar», menyudagi «Barcha stollar (zal)» yoki Telegram'ning «Orqaga» tugmasi.
 
 Guruhda bitta zal xabari turadi va stollar oʻzgarganda yangilanadi; `/bura` uni chat pastiga qayta chiqaradi (eskisi oʻchadi). Kutayotgan boʻsh stol boʻlmasa, `/bura` yangi stol ham ochadi.

@@ -58,8 +58,9 @@ test('4 kishi boʻlmasa boshlab boʻlmaydi; boʻsh oʻrinlarni bot bilan toʻldi
   r.connect(users[0]);
   r.connect(users[1]);
   assert.match(r.start('u1'), /4 kishi/);
-  assert.equal(r.fillBots('u2'), 'Faqat stol egasi');
-  assert.equal(r.fillBots('u1'), null);
+  r.connect(users[2]); r.leave('u3'); // u3 — kuzatuvchi
+  assert.match(r.fillBots('u3'), /stolda oʻtirgan/);
+  assert.equal(r.fillBots('u2'), null); // stolda oʻtirgan har kim bot qoʻsha oladi
   assert.equal(r.filled(), 4);
   c.advance(1000);
   assert.notEqual(r.phase, 'lobby');
@@ -163,17 +164,16 @@ test('yashirin kartalar boshqalarga koʻrinmaydi; notoʻgʻri harakat xato qayta
   }
 });
 
-test('oʻyin vaqtida chiqish — avtomatik oʻyin; qaytib kelsa davom etadi', () => {
+test('oʻyin vaqtida ilova yopilsa — oʻrni saqlanadi, vaqti tugaganda avtomatik yuriladi; qaytsa davom etadi', () => {
   const c = fakeClock();
   const r = makeRoom(c);
   for (let i = 0; i < 4; i++) r.connect(users[i]);
   c.advance(1000);
-  r.leave('u1');
-  assert.equal(r.seats[0].auto, true);
-  assert.notEqual(r.hostId, 'u1');
   r.disconnect('u1');
+  assert.equal(r.seatOf('u1'), 0);
   r.connect(users[0]);
   assert.equal(r.seats[0].auto, false);
+  assert.equal(r.paused(), false);
 });
 
 test('lobbida oflayn qolgan oʻyinchi 30 soniyadan keyin chiqariladi', () => {
