@@ -40,6 +40,7 @@
     this.round = 0;
     this.firstLeader = -1;
     this.score = [0, 0];      // match ballari (yutqazgan jamoaga yoziladi — kami yaxshi)
+    this.drawBonus = 0;       // 60:60 boʻlsa — keyingi yutqazgan jamoaga qoʻshimcha (har durang uchun +2)
     this.matchWins = [0, 0];
     this.matchNo = 1;
     this.matchOver = false;
@@ -291,7 +292,7 @@
 
   P.beginRound = function () {
     this.clearLobbyTimer();
-    if (this.matchOver) { this.score = [0, 0]; this.matchOver = false; this.matchNo++; }
+    if (this.matchOver) { this.score = [0, 0]; this.drawBonus = 0; this.matchOver = false; this.matchNo++; }
     // birinchi yurish har raundda navbat bilan almashadi
     this.firstLeader = this.firstLeader < 0 ? Math.floor(this.rng() * SEATS) : (this.firstLeader + 1) % SEATS;
     this.phase = 'playing';
@@ -326,8 +327,12 @@
 
   P.finishRound = function () {
     const r = this.game.result;
-    // Ball raundda yutqazgan jamoaga yoziladi (qoida — E.addToMatch)
-    const m = E.addToMatch(this.score, r.team, r.award);
+    // Ball raundda yutqazgan jamoaga yoziladi (qoida — E.addToMatch).
+    // 60:60 — hech kimga yozilmaydi; keyingi raundda yutqazgan jamoaga yana +2 qoʻshiladi.
+    const draw = r.type === 'draw';
+    const bonus = draw ? 0 : this.drawBonus;
+    const m = E.addToMatch(this.score, r.team, r.award + bonus);
+    this.drawBonus = draw ? this.drawBonus + 2 : 0;
     const loser = m.loser, matchLoser = m.matchLoser;
     this.score = m.score;
     if (matchLoser >= 0) {
@@ -337,6 +342,10 @@
     this.phase = 'roundEnd';
     this.lastResult = Object.assign({}, E.resultView(this.game), {
       round: this.round,
+      award: draw ? 0 : r.award + bonus,
+      base: r.award,
+      bonus: bonus,
+      nextBonus: this.drawBonus,
       loser: loser,
       score: this.score.slice(),
       matchOver: this.matchOver,
@@ -373,6 +382,7 @@
     this.game = null;
     this.lastEvent = null;
     this.score = [0, 0]; // lobbidan keyin yangi match
+    this.drawBonus = 0;
     this.matchOver = false;
     this.matchNo++;
     this.fixHost();
@@ -426,7 +436,8 @@
     } else {
       const actor = g.phase === 'lead' ? g.leader : g.turn;
       if (actor !== seatIdx) { this.reschedule(); return; }
-      const a = E.AI.choose(g, seatIdx, {});
+      // vaqt tugasa — chap tarafdagi kartalar; bot va chiqib ketganlar oʻrniga — kompyuter oʻyinchisi
+      const a = (kind === 'timeout' && E.autoMove(g, seatIdx)) || E.AI.choose(g, seatIdx, {});
       if (a) {
         const r = E.act(g, seatIdx, a);
         if (r.ok) {
@@ -461,6 +472,10 @@
       isHost: this.isHost(uid),
       spectator: mySeat < 0,
       spectators: this.spectators.size,
+      watchers: Array.from(this.spectators.values()).slice(0, 12).map(function (w) {
+        return { name: w.name, photo: w.photo || null, you: w.id === uid };
+      }),
+      drawBonus: this.drawBonus,
       settings: Object.assign({}, this.settings),
       seats: this.seats.map(function (s, i) {
         if (!s) return null;

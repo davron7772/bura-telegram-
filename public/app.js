@@ -15,7 +15,6 @@
   const RANK = { A: 'T', K: 'K', Q: 'D', J: 'V', '10': '10', '9': '9', '8': '8', '7': '7', '6': '6' };
   const RANK_NAME = { A: 'tuz', K: 'korol', Q: 'dama', J: 'valet', '10': 'oʻnlik', '9': 'toʻqqizlik', '8': 'sakkizlik', '7': 'yettilik', '6': 'oltilik' };
   const SUIT_NAME = { S: 'pika', H: 'chervi', D: 'bubna', C: 'tref' };
-  const SUIT_ORDER = { S: 0, H: 1, C: 2, D: 3 };
   const SUIT_CHAR = { S: '♠\uFE0E', H: '♥\uFE0E', D: '♦\uFE0E', C: '♣\uFE0E' };
   const POS = ['b', 'l', 't', 'r']; // men, chapdagi raqib, sherik (roʻparada), oʻngdagi raqib
   const AVATAR_BG = ['#2a2f57', '#7a2a31', '#1f4a4f', '#5b4223'];
@@ -313,13 +312,8 @@
   }
   function backHTML(size) { return '<div class="card back' + (size ? ' ' + size : '') + '"></div>'; }
 
-  function sortHand(hand, trump) {
-    return hand.slice().sort(function (a, b) {
-      const sa = E.suitOf(a), sb = E.suitOf(b);
-      const ka = sa === trump ? 10 : SUIT_ORDER[sa], kb = sb === trump ? 10 : SUIT_ORDER[sb];
-      return ka - kb || E.strength(a) - E.strength(b);
-    });
-  }
+  // Server ham aynan shu tartibdan foydalanadi: vaqt tugasa, chap tarafdagi kartalar yuriladi
+  function sortHand(hand, trump) { return E.sortHand(hand, trump); }
 
   function btn(act, label, kind, disabled, extra) {
     return '<button type="button" class="btn ' + kind + '" data-act="' + act + '"' + (disabled ? ' disabled' : '') + (extra || '') + '>' + label + '</button>';
@@ -551,11 +545,23 @@
     ['l', 't', 'r'].forEach(function (p) { h += slotHTML(r, p, seatAt[p], plays); });
     h += '<div class="cell">' + deckHTML(g) + '</div>';
     h += slotHTML(r, 'b', seatAt.b, plays);
-    h += '<div class="cell">' + (g.trick && g.trick.k > 1 ? '<span class="ktag">' + g.trick.k + ' tadan</span>' : '') + '</div>';
+    h += '<div class="cell side">' + (g.trick && g.trick.k > 1 ? '<span class="ktag">' + g.trick.k + ' tadan</span>' : '') + watchHTML(r) + '</div>';
     h += '</div>';
     h += '<div class="event' + (S.eventFresh && !reduceMotion ? ' enter' : '') + '">' + eventHTML(r) + '</div></section>';
     h += dockHTML(r);
     return h;
+  }
+
+  // Stolni kuzatayotganlar (mehmonlar) — oʻynayotganlarga ham koʻrinib turadi
+  function watchHTML(r) {
+    const w = r.watchers || [];
+    if (!w.length) return '';
+    const names = w.map(function (x) { return x.you ? 'Siz' : x.name; });
+    return '<button type="button" class="watch" data-act="watchers" aria-label="Kuzatmoqda: ' + esc(names.join(', ')) + '">' +
+      '<span class="wavs">' + w.slice(0, 3).map(function (x, i) {
+        return '<span class="wav" style="--av:' + AVATAR_BG[(i + 1) % AVATAR_BG.length] + '"><span>' + esc(firstLetter(x.name)) + '</span>' +
+          (x.photo ? '<img src="' + esc(x.photo) + '" alt="" referrerpolicy="no-referrer">' : '') + '</span>';
+      }).join('') + '</span><small>👀 ' + (w.length === 1 ? esc(names[0]) : w.length + ' kishi') + '</small></button>';
   }
 
   function oppHTML(r, s, p) {
@@ -664,7 +670,7 @@
   function resultShort(r) {
     const res = r.result;
     if (!res) return '';
-    if (res.type === 'draw') return '60:60 — durang, ball yozilmadi';
+    if (res.type === 'draw') return '60:60 — durang. Keyingi raundda yutqazganga +' + (res.nextBonus || 2);
     return (res.type === 'aces' ? '4 ta tuz! ' : '') + esc(teamName(r, res.team)) + ' yutdi. ' +
       esc(teamTo(r, 1 - res.team)) + ' +' + res.award + ' ball';
   }
@@ -928,6 +934,7 @@
     let h = '<h2>Hisob</h2><p class="sub">' + (r.round ? r.round + '-raund. Raundda yutqazgan jamoaga ball yoziladi; ' + r.lose + ' ballga yetgan jamoa matchni boy beradi.' : 'Oʻyin hali boshlanmadi') + '</p>' + teamsHTML(r, null);
     const note = edgeNote(r);
     if (note) h += '<p class="match edge">' + note + '</p>';
+    if (r.drawBonus) h += '<p class="match">Oldingi raund durang: bu raundda yutqazgan jamoaga yana +' + r.drawBonus + ' ball qoʻshiladi.</p>';
     if (r.matchWins[0] || r.matchWins[1]) h += '<p class="sub">Yutilgan matchlar: ' + r.matchWins[r.myTeam === 1 ? 1 : 0] + ' : ' + r.matchWins[r.myTeam === 1 ? 0 : 1] + '</p>';
     if (VC) {
       h += '<h3>Ovozli chat</h3><div data-vpanel>' + voicePanelHTML() + '</div>' +
@@ -946,8 +953,9 @@
   // Yutqazgan jamoaga nega shuncha ball yozilgani
   function lossReason(res, we) {
     if (res.type === 'aces') return '';
-    if (res.award === 6) return we ? 'birorta ham karta ololmadingiz' : 'birorta ham karta ololmadi';
-    if (res.award === 4) return we ? '31 ochkoga yetmadingiz' : '31 ochkoga yetmadi';
+    const base = res.base != null ? res.base : res.award;
+    if (base === 6) return we ? 'birorta ham karta ololmadingiz' : 'birorta ham karta ololmadi';
+    if (base === 4) return we ? '31 ochkoga yetmadingiz' : '31 ochkoga yetmadi';
     return we ? '31 va undan koʻp ochko oldingiz' : '31 va undan koʻp ochko oldi';
   }
 
@@ -956,12 +964,12 @@
     let title, sub = '', cards = '', big = false;
     if (res.type === 'draw') {
       title = 'Durang';
-      sub = '60:60 — hech kimga ball yozilmaydi.';
+      sub = '60:60 — hech kimga ball yozilmaydi. Keyingi raundda yutqazgan jamoaga yana +' + (res.nextBonus || 2) + ' ball qoʻshib yoziladi.';
     } else {
       const ours = mine && res.team === r.myTeam;
       const lost = 1 - res.team;
       const why = lossReason(res, mine && lost === r.myTeam);
-      const pen = esc(teamTo(r, lost)) + ' +' + res.award + ' ball' + (why ? ' — ' + why : '') + '.';
+      const pen = esc(teamTo(r, lost)) + ' +' + res.award + ' ball' + (res.bonus ? ' (' + res.base + ' + ' + res.bonus + ' durang uchun)' : '') + (why ? ' — ' + why : '') + '.';
       if (res.type === 'aces') {
         big = true;
         title = '4 ta tuz!';
@@ -1011,7 +1019,8 @@
       '<li><b>Bura</b> — qoʻldagi 4 kartaning hammasi koʻzir: navbatsiz yuradi.</li>' +
       '<li><b>4 ta tuz</b> — mutlaq gʻalaba.</li></ul>' +
       '<h3>Hisob</h3><ul class="rules">' +
-      '<li>Kartalar tugagach jamoa ochkolari sanaladi: 61 va undan koʻp — gʻalaba, 60:60 — durang.</li>' +
+      '<li>Kartalar tugagach jamoa ochkolari sanaladi: 61 va undan koʻp — gʻalaba. 60:60 — durang: hech kimga ball yozilmaydi, keyingi raundda yutqazgan jamoaga yana +2 ball qoʻshiladi.</li>' +
+      '<li>Yurish vaqti tugasa, qoʻlingizdagi chap tarafdagi kartalar avtomatik yuriladi.</li>' +
       '<li>Raundda yutqazgan jamoaga ball yoziladi: 31 va undan koʻp ochko olgan boʻlsa — 2, 31 dan kam — 4, birorta ham karta ololmagan boʻlsa yoki raqibda 4 ta tuz chiqsa — 6.</li>' +
       '<li>Ball qancha kam boʻlsa, shuncha yaxshi: 14 va undan koʻp ball toʻplagan jamoa matchni yutqazadi.</li>' +
       '<li>Aynan 12 ballda jamoaga shans beriladi — yana oʻynaydi. Yutsa, 12 da qoladi; yana yutqazsa, matchni boy beradi.</li>' +
@@ -1102,6 +1111,11 @@
         render();
         return send({ t: 'create', bots: act === 'new-bots' }, true);
       case 'invite': return share(Number(el.getAttribute('data-seat')));
+      case 'watchers': {
+        const w = (S.room && S.room.watchers) || [];
+        if (w.length) toast('Kuzatmoqda: ' + nameList(w.map(function (x) { return x.you ? 'siz' : x.name; })));
+        return;
+      }
       // guruh zali
       case 'tohall': S.sheet = null; return send({ t: 'hall' }, true);
       case 'henter': return send({ t: 'join', room: el.getAttribute('data-room') }, true);

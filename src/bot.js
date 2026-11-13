@@ -29,7 +29,7 @@ const RULES = [
   '🔥 <b>Bura</b> — qoʻldagi 4 kartaning hammasi koʻzir: navbatsiz yuradi.',
   '👑 <b>4 ta tuz</b> — mutlaq gʻalaba.',
   '',
-  '<b>Hisob:</b> kartalar tugagach jamoa ochkolari sanaladi. 61 va undan koʻp — gʻalaba, 60:60 — durang. Raundda yutqazgan jamoaga ball yoziladi: 31 va undan koʻp ochko olgan boʻlsa — 2, 31 dan kam — 4, birorta ham karta ololmagan boʻlsa yoki raqibda 4 ta tuz chiqsa — 6. 14 va undan koʻp ball toʻplagan jamoa matchni yutqazadi. Aynan 12 ballda jamoaga shans beriladi — yana oʻynaydi: yutsa, 12 da qoladi, yana yutqazsa, matchni boy beradi.'
+  '<b>Hisob:</b> kartalar tugagach jamoa ochkolari sanaladi. 61 va undan koʻp — gʻalaba, 60:60 — durang: hech kimga ball yozilmaydi, keyingi raundda yutqazgan jamoaga yana +2 ball qoʻshiladi. Yurish vaqti tugasa, chap tarafdagi kartalar avtomatik yuriladi. Raundda yutqazgan jamoaga ball yoziladi: 31 va undan koʻp ochko olgan boʻlsa — 2, 31 dan kam — 4, birorta ham karta ololmagan boʻlsa yoki raqibda 4 ta tuz chiqsa — 6. 14 va undan koʻp ball toʻplagan jamoa matchni yutqazadi. Aynan 12 ballda jamoaga shans beriladi — yana oʻynaydi: yutsa, 12 da qoladi, yana yutqazsa, matchni boy beradi.'
 ].join('\n');
 
 const HELP = [
@@ -89,7 +89,7 @@ function createBot(opts) {
         const s = room.seats[r.seat];
         return '👑 4 ta tuz! ' + (s ? esc(s.name) : '') + ' — ' + (r.team + 1) + '-jamoa yutdi (' + (2 - r.team) + '-jamoaga +' + r.award + ' ball)';
       }
-      default: return '🤝 60:60 — durang';
+      default: return '🤝 60:60 — durang, ball yozilmadi (keyingi raundda yutqazganga +' + (r.nextBonus || 2) + ')';
     }
   }
 

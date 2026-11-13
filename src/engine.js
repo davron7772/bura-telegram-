@@ -230,6 +230,32 @@
     return endRound(st, { type: team < 0 ? 'draw' : 'win', seat: -1, team: team });
   }
 
+  // Qoʻldagi kartalar tartibi (ekranda chapdan oʻngga): mastlar, koʻzir oxirida, har mast ichida kuchsizdan kuchliga
+  const SUIT_ORDER = { S: 0, H: 1, C: 2, D: 3 };
+  function sortHand(hand, trump) {
+    return hand.slice().sort(function (a, b) {
+      const sa = suitOf(a), sb = suitOf(b);
+      const ka = sa === trump ? 10 : SUIT_ORDER[sa], kb = sb === trump ? 10 : SUIT_ORDER[sb];
+      return ka - kb || strength(a) - strength(b);
+    });
+  }
+
+  // Vaqt tugadi: chap tarafdagi kartalar bilan avtomatik yuriladi.
+  // Birinchi yurishda — eng chapdagi bitta karta; javobda — chapdan k ta karta (urib oʻtsa — ochiq, aks holda yopiq tashlanadi)
+  function autoMove(st, seat) {
+    const hand = st.hands[seat];
+    if (!hand || !hand.length) return null;
+    const sorted = sortHand(hand, st.trump);
+    if (st.phase === 'lead' && seat === st.leader && !st.trick) return { type: 'lead', cards: [sorted[0]] };
+    if (st.phase === 'follow' && seat === st.turn && st.trick) {
+      const cards = sorted.slice(0, st.trick.k);
+      if (cards.length !== st.trick.k) return null;
+      const best = st.trick.plays[st.trick.best];
+      return { type: setBeats(cards, best.cards, st.trump) ? 'beat' : 'discard', cards: cards };
+    }
+    return null;
+  }
+
   // Raundda yutqazgan jamoaga yoziladigan ball
   function awardFor(st, r) {
     if (r.type === 'draw') return 0;
@@ -530,7 +556,7 @@
     beats: beats, setBeats: setBeats, combos: combos, isValidLead: isValidLead, legalLeads: legalLeads,
     beatingSets: beatingSets, canBeatWith: canBeatWith, isBura: isBura, isFourAces: isFourAces,
     newRound: newRound, act: act, collect: collect, takeEvents: takeEvents,
-    viewFor: viewFor, resultView: resultView, addToMatch: addToMatch, teamPoints: teamPoints, teamKnown: teamKnown, seatPoints: seatPoints,
+    viewFor: viewFor, resultView: resultView, sortHand: sortHand, autoMove: autoMove, addToMatch: addToMatch, teamPoints: teamPoints, teamKnown: teamKnown, seatPoints: seatPoints,
     AI: { choose: aiChoose }
   };
 });
