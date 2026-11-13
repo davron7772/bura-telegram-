@@ -782,7 +782,9 @@
     if (!g.hand && !r.seats[0]) return '<div class="hand spect"></div>';
     if (!g.hand) return '<div class="hand spect' + (isActor(g, 0) ? ' myturn' : '') + '" aria-label="' + esc(r.seats[0] ? r.seats[0].name : '') + ': ' + (g.counts[0] || 0) + ' ta karta">' + repeat(backHTML(), g.counts[0] || 0) + '</div>';
     const cards = sortHand(g.hand, g.trump);
-    const myTurn = isActor(g, r.mySeat) ? ' myturn' : '';
+    // Navbat menda: kartalar qizil yonadi — biror kartaga bosilgach, shu navbat davomida oʻchadi
+    if (!isActor(g, r.mySeat)) S.glowOff = false;
+    const myTurn = isActor(g, r.mySeat) && !S.glowOff ? ' myturn' : '';
     return '<div class="hand n' + cards.length + myTurn + '" role="group" aria-label="Qoʻlingizdagi kartalar">' + cards.map(function (c, i) {
       const sel = S.selected.indexOf(c) >= 0;
       const fresh = !S.seenHand.has(r.round + ':' + c) && !reduceMotion;
@@ -1215,6 +1217,9 @@
       while (S.selected.length > 4) S.selected.shift();
     }
     haptic('select');
+    S.glowOff = true;
+    const handEl = app.querySelector('.hand');
+    if (handEl) handEl.classList.remove('myturn');
     app.querySelectorAll('.hand .card').forEach(function (b) {
       const on = S.selected.indexOf(b.getAttribute('data-c')) >= 0;
       b.classList.toggle('sel', on);
