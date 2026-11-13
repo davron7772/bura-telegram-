@@ -47,6 +47,7 @@
     '<path d="M32 75H6M208 75h26M120 8V0M120 142v8M60 75l-12-10v20zM180 75l12-10v20z"/></g></svg>';
 
   const S = {
+    newSize: (function () { try { return localStorage.getItem('bura.size') === '2' ? 2 : 4; } catch (e) { return 4; } })(),
     screen: 'loading',
     room: null,
     hall: null,   // guruh zali: { key, title, tables }
@@ -236,11 +237,25 @@
   }
   function posOf(r, s) {
     const base = r.mySeat >= 0 ? r.mySeat : 0;
-    return POS[(s - base + 4) % 4];
+    const n = sizeOf(r);
+    return POS[((s - base + n) % n) * (4 / n)]; // 1×1 da raqib roʻparada
   }
+  function sizeOf(r) { return r && r.size === 2 ? 2 : 4; }
+  function duel(r) { return sizeOf(r) === 2; }
   function teamName(r, team) {
+    if (duel(r)) {
+      if (r.myTeam >= 0) return team === r.myTeam ? 'Siz' : 'Raqib';
+      const s = r.seats && r.seats[team];
+      return s ? s.name : (team + 1) + '-oʻyinchi';
+    }
     if (r.myTeam < 0) return (team + 1) + '-jamoa';
     return team === r.myTeam ? 'Sizning jamoangiz' : 'Raqiblar';
+  }
+  // Oʻrin vazifasi: sherik / raqib / jamoa
+  function seatRole(r, i, cap) {
+    if (duel(r)) return r.myTeam >= 0 ? (cap ? 'Raqib oʻrni' : 'raqib oʻrni') : (i + 1) + '-oʻyinchi';
+    if (r.myTeam >= 0) return i % 2 === r.myTeam ? (cap ? 'Sherigingiz oʻrni' : 'sherik oʻrni') : (cap ? 'Raqib oʻrni' : 'raqib oʻrni');
+    return (i % 2 + 1) + '-jamoa';
   }
 
   function setRoom(room, invite) {
@@ -457,31 +472,33 @@
     const left = '<b class="rleft" data-readyleft>' + Math.ceil(r.readyIn / 1000) + '</b>';
     let h = '<div class="readybar' + (me && !me.ready ? ' ask' : '') + '" role="region" aria-label="Tayyorlik">' + left + '<div class="rtxt">';
     if (me && !me.ready) h += '<b>Hamma oʻtirdi!</b><small>Tayyorman tugmasini bosing — aks holda mehmon rejimiga oʻtasiz</small></div>' + btn('ready', 'Tayyorman', 'primary', S.busy);
-    else h += '<b>' + (me ? 'Siz tayyorsiz' : 'Oʻyinchilar tayyorlanmoqda') + '</b><small>Tayyor: ' + n + '/4</small></div>';
+    else h += '<b>' + (me ? 'Siz tayyorsiz' : 'Oʻyinchilar tayyorlanmoqda') + '</b><small>Tayyor: ' + n + '/' + sizeOf(r) + '</small></div>';
     return h + '</div>';
   }
 
   function isMyLobby(t) { return !!(S.room && S.room.id === t.id && t.phase === 'lobby'); }
 
+  function hallOrder(t) { return duel(t) ? [1, 0] : [2, 1, 3, 0]; }
+  function hpos(t, i) { return duel(t) ? (i === 0 ? 's0' : 's2') : HALL_POS[i]; }
   function hallSeat(t, i) {
     const s = t.seats[i];
     const room = ' data-room="' + esc(t.id) + '" data-seat="' + i + '"';
     if (isMyLobby(t) && s && !s.bot && !s.you && S.room.isHost) {
-      return '<button type="button" class="hs take ' + HALL_POS[i] + '" data-act="seatmenu" data-seat="' + i + '" aria-label="' + esc(s.name) + ': oʻyindan chiqarish">' +
+      return '<button type="button" class="hs take ' + hpos(t, i) + '" data-act="seatmenu" data-seat="' + i + '" aria-label="' + esc(s.name) + ': oʻyindan chiqarish">' +
         '<span class="hava t' + (i % 2) + (s.online ? '' : ' off') + '" style="--av:' + AVATAR_BG[i % AVATAR_BG.length] + '"><span>' + esc(firstLetter(s.name)) + '</span>' +
         (s.photo ? '<img src="' + esc(s.photo) + '" alt="" referrerpolicy="no-referrer">' : '') + '</span><small>' + esc(s.name) + '</small>' +
         (t.readyIn ? '<i class="rdy' + (s.ready ? ' ok' : '') + '">' + (s.ready ? '✓' : '…') + '</i>' : '') + '</button>';
     }
     if (isMyLobby(t) && (!s || s.bot)) {
       // oʻzim turgan stol: boʻsh oʻrin — bot/taklif/oʻtirish, bot — chiqarish
-      if (!s) return '<button type="button" class="hs free ' + HALL_POS[i] + '" data-act="seatmenu" data-seat="' + i + '" aria-label="Boʻsh oʻrin: ' + (i % 2 + 1) + '-jamoa">' +
+      if (!s) return '<button type="button" class="hs free ' + hpos(t, i) + '" data-act="seatmenu" data-seat="' + i + '" aria-label="Boʻsh oʻrin: ' + (i % 2 + 1) + '-jamoa">' +
         '<span class="hava empty">+</span><small>Boʻsh</small></button>';
-      return '<button type="button" class="hs take ' + HALL_POS[i] + '" data-act="seatmenu" data-seat="' + i + '" aria-label="' + esc(s.name) + ': bot">' +
+      return '<button type="button" class="hs take ' + hpos(t, i) + '" data-act="seatmenu" data-seat="' + i + '" aria-label="' + esc(s.name) + ': bot">' +
         '<span class="hava t' + (i % 2) + '" style="--av:' + AVATAR_BG[i % AVATAR_BG.length] + '">' + iconSvg('i-bot') + '</span><small>' + esc(s.name) + '</small></button>';
     }
     if (!s) {
-      if (t.phase !== 'lobby') return '<div class="hs ' + HALL_POS[i] + '"><span class="hava empty"></span><small>boʻsh</small></div>';
-      return '<button type="button" class="hs free ' + HALL_POS[i] + '" data-act="hsit"' + room + ' aria-label="' + t.no + '-stol: ' + (i % 2 + 1) + '-jamoaga oʻtirish"' + (S.busy ? ' disabled' : '') + '>' +
+      if (t.phase !== 'lobby') return '<div class="hs ' + hpos(t, i) + '"><span class="hava empty"></span><small>boʻsh</small></div>';
+      return '<button type="button" class="hs free ' + hpos(t, i) + '" data-act="hsit"' + room + ' aria-label="' + t.no + '-stol: ' + (i % 2 + 1) + '-jamoaga oʻtirish"' + (S.busy ? ' disabled' : '') + '>' +
         '<span class="hava empty">+</span><small>Oʻtirish</small></button>';
     }
     const inner = '<span class="hava t' + (i % 2) + (s.online ? '' : ' off') + '" style="--av:' + AVATAR_BG[i % AVATAR_BG.length] + '">' +
@@ -489,14 +506,15 @@
       '</span><small>' + (s.you ? 'Siz' : esc(s.name)) + (s.auto ? ' · bot' : '') + '</small>' +
       (t.readyIn ? '<i class="rdy' + (s.ready ? ' ok' : '') + '" aria-label="' + (s.ready ? 'tayyor' : 'kutilmoqda') + '">' + (s.ready ? '✓' : '…') + '</i>' : '');
     if (t.phase === 'roundEnd' && (s.bot || s.auto) && t.mine < 0) {
-      return '<button type="button" class="hs take ' + HALL_POS[i] + '" data-act="hsit"' + room + ' aria-label="' + esc(s.name) + ' oʻrniga oʻtirish"' + (S.busy ? ' disabled' : '') + '>' + inner + '</button>';
+      return '<button type="button" class="hs take ' + hpos(t, i) + '" data-act="hsit"' + room + ' aria-label="' + esc(s.name) + ' oʻrniga oʻtirish"' + (S.busy ? ' disabled' : '') + '>' + inner + '</button>';
     }
-    return '<div class="hs ' + HALL_POS[i] + (s.you ? ' you' : '') + '">' + inner + '</div>';
+    return '<div class="hs ' + hpos(t, i) + (s.you ? ' you' : '') + '">' + inner + '</div>';
   }
 
   function hallStatus(t) {
     const n = t.seats.filter(Boolean).length;
-    if (t.phase === 'lobby') return n >= 4 ? { cls: 'go', text: t.readyIn ? 'Tayyorlik · ' + t.seats.filter(function (s) { return s && s.ready; }).length + '/4' : 'Boshlanmoqda' } : { cls: 'wait', text: 'Odam kutmoqda · ' + n + '/4' };
+    const N = sizeOf(t);
+    if (t.phase === 'lobby') return n >= N ? { cls: 'go', text: t.readyIn ? 'Tayyorlik · ' + t.seats.filter(function (s) { return s && s.ready; }).length + '/' + N : 'Boshlanmoqda' } : { cls: 'wait', text: 'Odam kutmoqda · ' + n + '/' + N };
     if (t.phase === 'roundEnd') return { cls: 'pause', text: t.matchOver ? 'Match tugadi' : t.round + '-raund tugadi' };
     return { cls: 'play', text: t.round + '-raund ketmoqda' };
   }
@@ -514,26 +532,26 @@
     else if (botSeat >= 0) action = btn('hsit', 'Bot oʻrniga', 'primary sm', S.busy, room + ' data-seat="' + botSeat + '"');
     else action = btn('henter', 'Kuzatish', 'secondary sm', S.busy, room);
     const mid = t.phase === 'lobby'
-      ? '<b>' + t.seats.filter(Boolean).length + '/4</b><small>oʻrin</small>'
+      ? '<b>' + t.seats.filter(Boolean).length + '/' + sizeOf(t) + '</b><small>oʻrin</small>'
       : '<b>' + t.score[0] + ' : ' + t.score[1] + '</b><small>hisob</small>';
     const meta = [];
     if (t.spectators) meta.push('👀 ' + t.spectators + ' kuzatmoqda');
     if (t.voice) meta.push('🎙 ' + t.voice);
     if (isMyLobby(t)) {
-      const r = S.room, need = 4 - t.seats.filter(Boolean).length;
-      meta.unshift(need > 0 ? 'Oʻyin 4 kishi toʻlganda boshlanadi' : t.readyIn ? 'Hamma oʻtirdi — «Tayyorman» bosing' : 'Hamma joyida — boshlanmoqda…');
+      const r = S.room, need = sizeOf(t) - t.seats.filter(Boolean).length;
+      meta.unshift(need > 0 ? (duel(t) ? 'Oʻyin 2 kishi toʻlganda boshlanadi' : 'Oʻyin 4 kishi toʻlganda boshlanadi') : t.readyIn ? 'Hamma oʻtirdi — «Tayyorman» bosing' : 'Hamma joyida — boshlanmoqda…');
       const tools = [];
       if (canManage(r) && need > 0) tools.push(btn('fillBots', 'Qolgan ' + need + ' oʻringa bot', 'secondary sm', S.busy));
       if (r.mySeat >= 0) tools.push(btn('leave', 'Stoldan turish', 'secondary sm', S.busy));
       return '<article class="tcard mine here">' +
         '<div class="tc-head"><b>' + t.no + '-stol · sizning stolingiz</b><span class="chip ' + st.cls + '">' + st.text + '</span></div>' +
-        '<div class="felt">' + [2, 1, 3, 0].map(function (i) { return hallSeat(t, i); }).join('') + '<div class="fmid">' + mid + '</div></div>' +
+        '<div class="felt">' + hallOrder(t).map(function (i) { return hallSeat(t, i); }).join('') + '<div class="fmid">' + mid + '</div></div>' +
         '<div class="tc-foot"><span class="meta">' + meta.join(' · ') + '</span>' + action + '</div>' +
         (tools.length ? '<div class="tc-tools">' + tools.join('') + '</div>' : '') + '</article>';
     }
     return '<article class="tcard' + (t.mine >= 0 ? ' mine' : '') + '">' +
       '<div class="tc-head"><b>' + t.no + '-stol</b><span class="chip ' + st.cls + '">' + st.text + '</span></div>' +
-      '<div class="felt">' + [2, 1, 3, 0].map(function (i) { return hallSeat(t, i); }).join('') + '<div class="fmid">' + mid + '</div></div>' +
+      '<div class="felt">' + hallOrder(t).map(function (i) { return hallSeat(t, i); }).join('') + '<div class="fmid">' + mid + '</div></div>' +
       '<div class="tc-foot"><span class="meta">' + (meta.join(' · ') || '&nbsp;') + '</span>' + action + '</div></article>';
   }
 
@@ -584,7 +602,7 @@
         (canKick ? '<button type="button" class="mini-btn" data-act="kick" data-seat="' + i + '">' + (s.bot ? 'Olib tashlash' : 'Chiqarish') + '</button>' : '') + '</li>';
     }
     // Boʻsh oʻrin: doʻstni aynan shu oʻringa taklif qilish, bot qoʻyish (stol egasi) yoki oʻzi oʻtirish
-    const hint = r.mySeat < 0 ? (i % 2 + 1) + '-jamoa' : i % 2 === r.mySeat % 2 ? 'Sherigingiz oʻrni' : 'Raqib oʻrni';
+    const hint = seatRole(r, i, true);
     let b = '';
     if (!DEMO) b += '<button type="button" class="mini-btn inv" data-act="invite" data-seat="' + i + '">' + iconSvg('i-send') + 'Taklif qilish</button>';
     if (canManage(r)) b += '<button type="button" class="mini-btn" data-act="addBot" data-seat="' + i + '" aria-label="Bu oʻringa bot qoʻshish">' + iconSvg('i-bot') + 'Bot</button>';
@@ -597,14 +615,15 @@
     const filled = r.seats.filter(Boolean).length;
     let h = '<div class="lobby">';
     if (r.group) h += '<nav class="crumbs"><button type="button" class="link" data-act="tohall">← Barcha stollar</button><b>' + r.no + '-stol</b></nav>';
-    h += heroHTML(false, true) + '<p class="tag compact">2×2 jamoa. Kim 61 ochko yigʻadi?</p>'; // ixcham: oʻrinlar va tugmalar birinchi ekranda koʻrinsin
-    for (let t = 0; t < 2; t++) {
+    h += heroHTML(false, true) + '<p class="tag compact">' + (duel(r) ? '1×1 — bir-biringizga qarshi.' : '2×2 jamoa.') + ' Kim 61 ochko yigʻadi?</p>'; // ixcham: oʻrinlar va tugmalar birinchi ekranda koʻrinsin
+    if (duel(r)) h += '<section class="team duel"><h2>1×1</h2><ul class="seats">' + seatRow(r, 0) + seatRow(r, 1) + '</ul></section>';
+    else for (let t = 0; t < 2; t++) {
       h += '<section class="team' + (r.myTeam === t ? ' mine' : '') + '"><h2>' + (t + 1) + '-jamoa' + (r.myTeam === t ? '<small>siz shu jamoadasiz</small>' : '') + '</h2>' +
         '<ul class="seats">' + seatRow(r, t) + seatRow(r, t + 2) + '</ul></section>';
     }
-    const need = 4 - filled;
+    const need = sizeOf(r) - filled;
     h += '<p class="status">' + (r.autoStart ? 'Hamma joyida — oʻyin boshlanmoqda…'
-      : need > 0 ? 'Oʻyin 4 kishi toʻlganda boshlanadi — yana ' + need + ' kishi kerak.' : '') + '</p>';
+      : need > 0 ? 'Oʻyin ' + sizeOf(r) + ' kishi toʻlganda boshlanadi — yana ' + need + ' kishi kerak.' : '') + '</p>';
     if (VC) h += '<div class="voice-row">' + micHTML('big') + '<div class="vtxt" data-vtext>' + voiceTextHTML() + '</div></div>';
     h += '<div class="lobby-actions">';
     if (!DEMO && need > 0) h += btn('share', iconSvg('i-send') + 'Doʻstlarni taklif qilish', 'primary ico');
@@ -624,7 +643,7 @@
   // Match hisobi: ball yutqazgan jamoaga yoziladi — kami yaxshi. 12 ball qizil bilan belgilanadi.
   function scoreChip(r) {
     const us = r.myTeam >= 0 ? r.myTeam : 0;
-    const label = r.myTeam >= 0 ? ['Biz', 'Ular'] : ['1-j.', '2-j.'];
+    const label = r.myTeam >= 0 ? (duel(r) ? ['Siz', 'Raqib'] : ['Biz', 'Ular']) : (duel(r) ? ['1', '2'] : ['1-j.', '2-j.']);
     const num = function (t) { return '<b' + (r.score[t] >= r.edge ? ' class="edge"' : '') + '>' + r.score[t] + '</b>'; };
     return '<div class="score" aria-label="Hisob: ' + label[0] + ' ' + r.score[us] + ', ' + label[1] + ' ' + r.score[1 - us] + '. ' + r.lose + ' ballga yetgan jamoa yutqazadi">' +
       '<small>' + label[0] + '</small>' + num(us) + '<i>:</i>' + num(1 - us) + '<small>' + label[1] + '</small></div>';
@@ -638,19 +657,19 @@
     if (r.matchOver) return '';
     const at = [0, 1].filter(function (t) { return r.score[t] >= r.edge && r.score[t] < r.lose; });
     if (!at.length) return '';
-    if (at.length === 2) return 'Ikkala jamoa ham ' + r.edge + ' ballda: keyingi raundda yutqazgan jamoa matchni boy beradi.';
+    if (at.length === 2) return (duel(r) ? 'Ikkalangiz ham ' : 'Ikkala jamoa ham ') + r.edge + ' ballda: keyingi raundda yutqazgan jamoa matchni boy beradi.';
     const t = at[0];
-    if (r.myTeam < 0) return (t + 1) + '-jamoa ' + r.edge + ' ballda — shans: yana yutqazsa, matchni boy beradi.';
+    if (r.myTeam < 0) return teamName(r, t) + ' ' + r.edge + ' ballda — shans: yana yutqazsa, matchni boy beradi.';
     return t === r.myTeam
-      ? 'Jamoangiz ' + r.edge + ' ballda — bu shans: yutsangiz, oʻyin davom etadi, yutqazsangiz — match tugaydi.'
-      : 'Raqiblar ' + r.edge + ' ballda — keyingi raundni yutsangiz, match sizniki.';
+      ? (duel(r) ? 'Siz ' : 'Jamoangiz ') + r.edge + ' ballda — bu shans: yutsangiz, oʻyin davom etadi, yutqazsangiz — match tugaydi.'
+      : (duel(r) ? 'Raqib ' : 'Raqiblar ') + r.edge + ' ballda — keyingi raundni yutsangiz, match sizniki.';
   }
 
   function tableHTML(r) {
     const g = r.game;
     if (!g) return '';
     const seatAt = {};
-    for (let s = 0; s < 4; s++) seatAt[posOf(r, s)] = s;
+    for (let s = 0; s < sizeOf(r); s++) seatAt[posOf(r, s)] = s;
     const plays = {};
     if (g.trick) g.trick.plays.forEach(function (p, i) { plays[p.seat] = { p: p, i: i }; });
 
@@ -689,7 +708,7 @@
   function canManage(r) { return r.mySeat >= 0 && r.seats[r.mySeat] && !r.seats[r.mySeat].auto; }
 
   function emptySeatHTML(r, s, cls) {
-    const role = r.myTeam >= 0 ? (s % 2 === r.myTeam ? 'sherik oʻrni' : 'raqib oʻrni') : (s % 2 + 1) + '-jamoa';
+    const role = seatRole(r, s, false);
     return '<button type="button" class="' + cls + ' empty" data-act="seatmenu" data-seat="' + s + '" aria-label="Boʻsh oʻrin, ' + role + '">' +
       '<div class="ava ghost"><span>+</span></div><div class="nm"><span>Boʻsh oʻrin</span></div><div class="mate">' + role + '</div></button>';
   }
@@ -778,8 +797,9 @@
     let h = '<section class="dock">';
     if (myTurn && S.deadlineAt) h += '<div class="mytimer"><i></i></div>';
     if (me >= 0) {
-      let help = g.teamCards ? 'Jamoa olgan: ' + g.teamCards + ' ta karta' : 'Jamoangiz hali karta olmadi';
-      if (g.teamCards && g.teamKnown != null) help = 'Jamoa: <b>' + g.teamKnown + '</b> ochiq ochko' + (g.teamHidden ? ', ' + g.teamHidden + ' ta yopiq' : '');
+      const d = duel(r);
+      let help = g.teamCards ? (d ? 'Olganingiz: ' : 'Jamoa olgan: ') + g.teamCards + ' ta karta' : (d ? 'Hali karta olmadingiz' : 'Jamoangiz hali karta olmadi');
+      if (g.teamCards && g.teamKnown != null) help = (d ? 'Sizda: <b>' : 'Jamoa: <b>') + g.teamKnown + '</b> ochiq ochko' + (g.teamHidden ? ', ' + g.teamHidden + ' ta yopiq' : '');
       h += '<div class="mebar' + (myTurn ? ' turn' : '') + '"><span><b>Siz</b></span><span class="help">' + help + '</span></div>';
     } else if (!r.seats[0]) {
       h += '<div class="mebar"><span><b>Boʻsh oʻrin</b> · ' + (r.myTeam >= 0 ? '' : '1-jamoa') + '</span>' +
@@ -941,7 +961,7 @@
   function voiceRole(e) {
     const r = S.room;
     if (e.seat < 0) return 'tomoshabin';
-    if (!r || r.myTeam < 0) return (e.seat % 2 + 1) + '-jamoa';
+    if (!r || r.myTeam < 0) return duel(r) ? (e.seat + 1) + '-oʻyinchi' : (e.seat % 2 + 1) + '-jamoa';
     return e.seat % 2 === r.myTeam ? 'sherigingiz' : 'raqib';
   }
   // Stolda oʻtirgan, lekin ovozli chatga qoʻshilmagan odamlar (ularni eshitmaysiz — ular ham sizni)
@@ -1068,9 +1088,9 @@
 
   // Stoldagi oʻrinni bosganda: boʻsh — oʻtirish / bot / taklif; bot — chiqarish
   function seatSheetHTML(r, i) {
-    if (!(i >= 0 && i < 4)) return '';
+    if (!(i >= 0 && i < sizeOf(r))) return '';
     const s = r.seats[i];
-    const role = r.myTeam >= 0 ? (i % 2 === r.myTeam ? 'Sherigingiz oʻrni' : 'Raqib oʻrni') : (i % 2 + 1) + '-jamoa';
+    const role = seatRole(r, i, true);
     let h = '', b = '';
     if (!s) {
       h = '<h2>Boʻsh oʻrin</h2><p class="sub">' + role + (r.phase === 'playing' ? '. Oʻyin toʻxtagan — oʻrin toʻlgach davom etadi.' : '') + '</p>';
@@ -1097,8 +1117,14 @@
       '<span class="ci">' + iconSvg(icon) + '</span><span class="ct"><b>' + title + '</b><small>' + text + '</small></span></button>';
   }
   function createHTML() {
-    return '<h2>Yangi stol</h2><p class="sub">Kim bilan oʻynaysiz?</p><div class="choices">' +
-      choiceHTML('new-friends', 'i-users', 'Doʻstlar bilan', 'Stol botsiz ochiladi. Doʻstlaringizni taklif qiling, kerak boʻlsa — bot qoʻshing. Oʻyin 4 kishi toʻlganda boshlanadi.') +
+    const n = S.newSize === 2 ? 2 : 4;
+    const mode = function (v, t, sub) {
+      return '<button type="button" class="mode' + (n === v ? ' on' : '') + '" data-act="newsize" data-n="' + v + '" aria-pressed="' + (n === v) + '"><b>' + t + '</b><small>' + sub + '</small></button>';
+    };
+    return '<h2>Yangi stol</h2><p class="sub">Oʻyin turi</p><div class="modes" role="group" aria-label="Oʻyin turi">' +
+      mode(4, '4 kishi', '2×2 jamoa') + mode(2, '2 kishi', 'bir-biriga qarshi') + '</div>' +
+      '<p class="sub">Kim bilan oʻynaysiz?</p><div class="choices">' +
+      choiceHTML('new-friends', 'i-users', 'Doʻstlar bilan', n === 2 ? 'Stol botsiz ochiladi. Doʻstingizni taklif qiling yoki bot qoʻshing. Oʻyin 2 kishi toʻlganda boshlanadi.' : 'Stol botsiz ochiladi. Doʻstlaringizni taklif qiling, kerak boʻlsa — bot qoʻshing. Oʻyin 4 kishi toʻlganda boshlanadi.') +
       choiceHTML('new-bots', 'i-bot', 'Botlar bilan', 'Boʻsh oʻrinlarga botlar oʻtiradi — oʻyin darhol boshlanadi.', 'alt') + '</div>';
   }
 
@@ -1111,8 +1137,9 @@
         (res ? '<div class="tpts">' + res.points[t] + '<small> ochko</small></div>' : '') +
         '<div class="tscore' + (r.score[t] >= r.edge ? ' edge' : '') + '">' + r.score[t] + ' <small>ball</small>' +
         (res && res.type !== 'draw' && t !== res.team ? ' <em>+' + res.award + '</em>' : '') + '</div><ul>';
-      for (let i = t; i < 4; i += 2) {
+      for (let i = t; i < sizeOf(r); i += 2) {
         const s = r.seats[i];
+        if (duel(r) && r.myTeam < 0 && !res) continue; // nomi sarlavhada
         h += '<li>' + (s ? esc(s.name) + (s.you && s.name !== 'Siz' ? ' <small>siz</small>' : '') : '—') + (res ? '<span>' + res.totals[i] + '</span>' : '') + '</li>';
       }
       h += '</ul></div>';
@@ -1169,7 +1196,7 @@
         sub = (res.via === 'taken' ? esc(teamName(r, res.team)) + ' 4 ta tuzni yigʻib oldi — mutlaq gʻalaba. '
           : esc(seatName(r, res.seat)) + ' — ' + esc(teamName(r, res.team)).toLowerCase() + ' mutlaq yutdi. ') + pen;
       } else {
-        title = !mine ? (res.team + 1) + '-jamoa yutdi' : ours ? 'Siz yutdingiz!' : 'Raqiblar yutdi';
+        title = !mine ? esc(teamName(r, res.team)) + (duel(r) ? ' yutdi' : ' yutdi') : ours ? 'Siz yutdingiz!' : duel(r) ? 'Raqib yutdi' : 'Raqiblar yutdi';
         sub = pen;
       }
     }
@@ -1177,8 +1204,8 @@
     if (res.matchOver) {
       const L = res.matchLoser, n = r.score[L];
       h += '<p class="match">' + (mine
-        ? (L === r.myTeam ? 'Jamoangiz ' + n + ' ballga yetdi — match boy berildi. ' : 'Raqiblar ' + n + ' ballga yetdi — match sizniki! ')
-        : (L + 1) + '-jamoa ' + n + ' ballga yetdi — ' + (2 - L) + '-jamoa matchni yutdi. ') +
+        ? (L === r.myTeam ? (duel(r) ? 'Siz ' : 'Jamoangiz ') + n + ' ballga yetdi — match boy berildi. ' : (duel(r) ? 'Raqib ' : 'Raqiblar ') + n + ' ballga yetdi — match sizniki! ')
+        : esc(teamName(r, L)) + ' ' + n + ' ballga yetdi — ' + esc(teamName(r, 1 - L)) + ' matchni yutdi. ') +
         'Keyingi raund yangi match boʻlib boshlanadi.</p>';
     } else {
       const note = edgeNote(r);
@@ -1258,7 +1285,7 @@
   // Taklif havolasi: aniq oʻrin uchun stol raqamiga "s<oʻrin>" qoʻshiladi — doʻstingiz aynan oʻsha joyga oʻtiradi
   function inviteLink(seat) {
     const r = S.room, link = S.invite;
-    if (!link || !r || !(seat >= 0 && seat < 4)) return link;
+    if (!link || !r || !(seat >= 0 && seat < sizeOf(r))) return link;
     return link.slice(-r.id.length) === r.id ? link + 's' + seat : link;
   }
   function share(seat) {
@@ -1314,7 +1341,11 @@
       case 'new-friends': case 'new-bots':
         S.sheet = null;
         render();
-        return send({ t: 'create', bots: act === 'new-bots' }, true);
+        return send({ t: 'create', bots: act === 'new-bots', size: S.newSize === 2 ? 2 : 4 }, true);
+      case 'newsize':
+        S.newSize = Number(el.getAttribute('data-n')) === 2 ? 2 : 4;
+        try { localStorage.setItem('bura.size', String(S.newSize)); } catch (e) { /* */ }
+        return render();
       case 'invite': return share(Number(el.getAttribute('data-seat')));
       case 'ready': return send({ t: 'ready' }, true);
       case 'lang':

@@ -41,7 +41,8 @@
     this.awayMs = o.awayMs != null ? o.awayMs : 90000;          // hamma oflayn boʻlsa (ilova yopilgan)
     this.resumeMs = o.resumeMs != null ? o.resumeMs : 30000;    // davom/yangidan tanlovi — shundan keyin davom etadi
 
-    this.seats = [null, null, null, null]; // {id, name, photo, bot, auto, offlineSince}; 0 va 2 — 1-jamoa, 1 va 3 — 2-jamoa
+    this.size = o.size === 2 ? 2 : 4; // 4 — 2×2 jamoaviy, 2 — bir-biriga qarshi
+    this.seats = this.size === 2 ? [null, null] : [null, null, null, null]; // {id, name, photo, bot, auto, offlineSince}; 0 va 2 — 1-jamoa, 1 va 3 — 2-jamoa
     this.spectators = new Map();
     this.online = new Map();
     this.hostId = null;
@@ -86,7 +87,7 @@
   P.touch = function () { this.lastActive = this.now(); };
   P.changed = function () { this.touch(); if (!this.destroyed) { this.checkEmpty(); this.onChange(this); } };
   // Oʻyin oʻrtasida oʻrin boʻsh — oʻyin toʻxtaydi (kimdir oʻtirguncha yoki bot qoʻshilguncha)
-  P.paused = function () { return this.phase === 'playing' && this.filled() < SEATS; };
+  P.paused = function () { return this.phase === 'playing' && this.filled() < this.size; };
   P.frozen = function () { return this.paused() || this.resumeAsk; };
 
   // Stolda faol oʻyinchi qolmasa — yopiladi. Hamma turib ketsa — darhol; hamma oflayn boʻlsa — kutib turib.
@@ -155,7 +156,7 @@
       if (s.auto) { s.auto = false; this.fixHost(); }
       this.spectators.delete(user.id);
     } else if (this.phase === 'lobby' && this.firstFree() >= 0) {
-      const want = Number.isInteger(pref) && pref >= 0 && pref < SEATS && !this.seats[pref] ? pref : this.firstFree();
+      const want = Number.isInteger(pref) && pref >= 0 && pref < this.size && !this.seats[pref] ? pref : this.firstFree();
       this.addHuman(user, want);
     } else {
       this.spectators.set(user.id, user);
@@ -187,7 +188,7 @@
     if (this.phase !== 'lobby') return false;
     const now = this.now();
     let ch = false;
-    for (let i = 0; i < SEATS; i++) {
+    for (let i = 0; i < this.size; i++) {
       const s = this.seats[i];
       if (s && !s.bot && !this.isOnline(s.id) && s.offlineSince && now - s.offlineSince >= 30000) { this.seats[i] = null; ch = true; }
     }
@@ -224,7 +225,7 @@
   };
 
   P.sit = function (uid, seatIdx) {
-    const idx = typeof seatIdx === 'number' && seatIdx >= 0 && seatIdx < SEATS ? seatIdx : -1;
+    const idx = typeof seatIdx === 'number' && seatIdx >= 0 && seatIdx < this.size ? seatIdx : -1;
     const my = this.seatOf(uid);
     if (my >= 0) {
       const s = this.seats[my];
@@ -290,7 +291,7 @@
   // Boʻshagan oʻrin toʻldi: oʻyin oʻrtasida boʻlsa — stol egasidan soʻraladi (davom ettirish yoki yangidan)
   P.seatFilled = function () {
     if (this.phase === 'lobby') { this.checkAutoStart(); return; }
-    if (this.phase !== 'playing' || this.filled() < SEATS || this.resumeAsk) { this.reschedule(); return; }
+    if (this.phase !== 'playing' || this.filled() < this.size || this.resumeAsk) { this.reschedule(); return; }
     const self = this;
     this.resumeAsk = true;
     this.resumeAt = this.now() + this.resumeMs;
@@ -332,7 +333,7 @@
 
   P.addBot = function (uid, seatIdx) {
     if (!this.canManage(uid)) return 'Bot qoʻshish uchun stolda oʻtirgan boʻlishingiz kerak';
-    const t = typeof seatIdx === 'number' && seatIdx >= 0 && seatIdx < SEATS && !this.seats[seatIdx] ? seatIdx : this.firstFree();
+    const t = typeof seatIdx === 'number' && seatIdx >= 0 && seatIdx < this.size && !this.seats[seatIdx] ? seatIdx : this.firstFree();
     if (t < 0) return 'Boʻsh oʻrin yoʻq';
     this.seats[t] = this.makeBot();
     this.seatFilled();
@@ -343,7 +344,7 @@
   P.fillBots = function (uid) {
     if (!this.canManage(uid)) return 'Bot qoʻshish uchun stolda oʻtirgan boʻlishingiz kerak';
     if (this.firstFree() < 0) return 'Boʻsh oʻrin yoʻq';
-    for (let i = 0; i < SEATS; i++) if (!this.seats[i]) this.seats[i] = this.makeBot();
+    for (let i = 0; i < this.size; i++) if (!this.seats[i]) this.seats[i] = this.makeBot();
     this.seatFilled();
     this.changed();
     return null;
@@ -376,13 +377,13 @@
   };
 
   P.checkAutoStart = function () {
-    if (this.phase !== 'lobby' || this.filled() < SEATS) { this.cancelReady(); return; }
+    if (this.phase !== 'lobby' || this.filled() < this.size) { this.cancelReady(); return; }
     if (this.requireReady) return this.checkReady();
     if (this.lobbyTimer) return;
     const self = this;
     this.lobbyTimer = this.setTimer(function () {
       self.lobbyTimer = null;
-      if (self.phase === 'lobby' && self.filled() === SEATS && !self.destroyed) {
+      if (self.phase === 'lobby' && self.filled() === self.size && !self.destroyed) {
         self.beginRound();
         self.changed();
       }
@@ -417,7 +418,7 @@
   P.readyTimeout = function () {
     if (this.phase !== 'lobby') return;
     const out = [];
-    for (let i = 0; i < SEATS; i++) {
+    for (let i = 0; i < this.size; i++) {
       const s = this.seats[i];
       if (!s || s.bot || s.ready) continue;
       out.push(s.id);
@@ -433,7 +434,7 @@
     if (this.phase !== 'lobby') return 'Oʻyin allaqachon boshlangan';
     const i = this.seatOf(uid);
     if (i < 0) return 'Siz bu stolda oʻynamayapsiz';
-    if (this.filled() < SEATS) return 'Hali hamma oʻtirmadi';
+    if (this.filled() < this.size) return 'Hali hamma oʻtirmadi';
     this.seats[i].ready = true;
     this.checkAutoStart();
     this.changed();
@@ -443,7 +444,7 @@
   P.start = function (uid) {
     if (this.phase !== 'lobby') return 'Oʻyin allaqachon boshlangan';
     if (!this.isHost(uid)) return 'Faqat stol egasi boshlay oladi';
-    if (this.filled() < SEATS) return '4 kishi kerak — boʻsh oʻrinlarga bot qoʻshing';
+    if (this.filled() < this.size) return (this.size + ' kishi kerak — boʻsh oʻrinlarga bot qoʻshing');
     this.beginRound();
     this.changed();
     return null;
@@ -455,11 +456,11 @@
     this.readyOut = null;
     if (this.matchOver) { this.score = [0, 0]; this.drawBonus = 0; this.matchOver = false; this.matchNo++; }
     // birinchi yurish har raundda navbat bilan almashadi
-    this.firstLeader = this.firstLeader < 0 ? Math.floor(this.rng() * SEATS) : (this.firstLeader + 1) % SEATS;
+    this.firstLeader = this.firstLeader < 0 ? Math.floor(this.rng() * this.size) : (this.firstLeader + 1) % this.size;
     this.phase = 'playing';
     this.round++;
     this.lastResult = null;
-    this.game = E.newRound({ leader: this.firstLeader, rng: this.rng });
+    this.game = E.newRound({ leader: this.firstLeader, rng: this.rng, n: this.size });
     const evs = E.takeEvents(this.game);
     this.setEvents([{ n: 0, kind: 'deal', seat: this.firstLeader, round: this.round }].concat(evs));
     if (this.game.phase === 'roundEnd') this.finishRound();
@@ -529,7 +530,7 @@
     if (this.phase !== 'roundEnd') return 'Raund hali tugamagan';
     const i = this.seatOf(uid);
     if (i < 0 || this.seats[i].auto) return 'Faqat oʻyinchilar davom ettira oladi';
-    if (this.filled() < SEATS) return 'Boʻsh oʻrin bor — avval kimdir oʻtirsin yoki bot qoʻshing';
+    if (this.filled() < this.size) return 'Boʻsh oʻrin bor — avval kimdir oʻtirsin yoki bot qoʻshing';
     this.beginRound();
     this.changed();
     return null;
@@ -538,7 +539,7 @@
   P.backToLobby = function (uid) {
     if (this.phase !== 'roundEnd') return 'Faqat raund oxirida mumkin';
     if (!this.isHost(uid)) return 'Faqat stol egasi';
-    for (let i = 0; i < SEATS; i++) {
+    for (let i = 0; i < this.size; i++) {
       const s = this.seats[i];
       if (s && s.auto) {
         if (this.isOnline(s.id)) this.spectators.set(s.id, { id: s.id, name: s.name, photo: s.photo });
@@ -633,6 +634,7 @@
       group: this.groupKey,
       no: this.no,
       phase: this.phase,
+      size: this.size,
       round: this.round,
       mySeat: mySeat,
       myTeam: mySeat >= 0 ? E.teamOf(mySeat) : -1,

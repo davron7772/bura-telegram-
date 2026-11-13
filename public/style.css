@@ -725,3 +725,12 @@ button.hs:focus-visible { outline: 2px solid #fff; outline-offset: 2px; border-r
   .hand.myturn .card, .opp.turn .fan .mini { animation: none; box-shadow: 0 0 0 2px rgba(230, 40, 50, .95); }
 }
 .hand.myturn .card.sel { animation: none; }
+
+/* Yangi stol: oʻyin turi (4 kishi 2×2 / 2 kishi 1×1) */
+.modes { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 8px 0 14px; }
+.mode { display: flex; flex-direction: column; align-items: center; gap: 2px; min-height: 64px; padding: 10px 8px; border: 0; border-radius: 14px; background: rgba(247, 236, 223, .06); box-shadow: inset 0 0 0 1.5px rgba(247, 236, 223, .18); color: var(--text); font: inherit; cursor: pointer; }
+.mode b { font: 700 17px var(--sans); }
+.mode small { color: var(--muted); font-size: 13px; }
+.mode.on { background: rgba(240, 180, 60, .16); box-shadow: inset 0 0 0 2px var(--saffron); }
+.mode.on small { color: var(--text); }
+.mode:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }

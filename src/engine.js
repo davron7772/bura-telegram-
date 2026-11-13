@@ -145,7 +145,7 @@
   // opts.leader — shu raundda birinchi yuradigan oʻyinchi (har raundda navbat bilan almashadi)
   function newRound(opts) {
     opts = opts || {};
-    const n = N;
+    const n = opts.n === 2 ? 2 : N;
     const leader = (((opts.leader || 0) % n) + n) % n;
     let deck, hands, p, tries = 0;
     // Tarqatishda bitta oʻyinchiga 4 ta tuz tushmaydi — tuzlarni oʻyinchilar oʻyin davomida yigʻadi

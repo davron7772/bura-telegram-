@@ -92,6 +92,7 @@ class Hub {
       title: opts.title || '',
       groupKey: g ? g.key : null,
       no: g ? this.freeTableNo(g) : 0,
+      size: opts.size === 2 ? 2 : 4,
       turnSeconds: this.cfg.turnSeconds,
       requireReady: this.cfg.requireReady !== false, // hamma «Tayyorman» bosgach boshlanadi
       readyMs: this.cfg.readyMs,
@@ -381,6 +382,7 @@ class Hub {
       id: r.id,
       no: r.no,
       phase: r.phase,
+      size: r.size,
       round: r.round,
       score: r.score.slice(),
       matchOver: r.matchOver,
@@ -460,7 +462,7 @@ class Hub {
       this.leaveRoomFor(c);
       this.enter(c, room);
     }
-    if (Number.isInteger(m.seat) && m.seat >= 0 && m.seat < 4 && room.seatOf(c.user.id) !== m.seat) {
+    if (Number.isInteger(m.seat) && m.seat >= 0 && m.seat < room.size && room.seatOf(c.user.id) !== m.seat) {
       const err = room.dispatch(c.user.id, { t: 'sit', seat: m.seat });
       if (err) this.send(c, { t: 'error', msg: err });
     }
@@ -475,7 +477,7 @@ class Hub {
     if (now - (g.lastCreate.get(c.user.id) || 0) < CREATE_COOLDOWN_MS) return this.send(c, { t: 'error', msg: 'Biroz kuting — stol hozirgina ochildi' });
     if (this.hallTables(g).length >= this.hallMax(g)) return this.send(c, { t: 'error', msg: 'Zalda stollar toʻla' });
     g.lastCreate.set(c.user.id, now);
-    const room = this.createRoom({ group: true, chatId: g.chatId, title: g.title });
+    const room = this.createRoom({ group: true, chatId: g.chatId, title: g.title, size: m && m.size === 2 ? 2 : 4 });
     this.leaveRoomFor(c);
     this.enter(c, room);
     if (bots) room.fillBots(c.user.id); // stol toʻla — guruhni chaqirishning keragi yoʻq

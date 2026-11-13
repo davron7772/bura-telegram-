@@ -74,7 +74,7 @@ function createBot(opts) {
   // ---------- stol xabari ----------
   function teamNames(room, team) {
     const out = [];
-    for (let i = team; i < 4; i += 2) {
+    for (let i = team; i < room.seats.length; i += 2) {
       const s = room.seats[i];
       out.push(s ? (s.bot ? '🤖 ' : '') + esc(s.name) + (s.id === room.hostId ? ' 👑' : '') : '<i>boʻsh</i>');
     }
@@ -96,13 +96,14 @@ function createBot(opts) {
 
   function tableText(room) {
     const filled = room.seats.filter(Boolean).length;
+    const N = room.seats.length;
     const L = ['🃏 <b>Bura</b> — stol <code>' + room.id + '</code>', ''];
     if (room.phase === 'lobby') {
-      L.push('👥 Oʻyinchilar: <b>' + filled + '/4</b>');
-      L.push('1-jamoa: ' + teamNames(room, 0));
-      L.push('2-jamoa: ' + teamNames(room, 1));
+      L.push('👥 Oʻyinchilar: <b>' + filled + '/' + N + '</b>' + (N === 2 ? ' · 1×1' : ''));
+      L.push((N === 2 ? '1-oʻyinchi: ' : '1-jamoa: ') + teamNames(room, 0));
+      L.push((N === 2 ? '2-oʻyinchi: ' : '2-jamoa: ') + teamNames(room, 1));
       L.push('');
-      L.push(filled >= 4 ? '⏳ Oʻyin boshlanmoqda…' : '⏳ Yana ' + (4 - filled) + ' kishi kerak. 4 kishi yigʻilsa, oʻyin oʻzi boshlanadi.');
+      L.push(filled >= N ? '⏳ Oʻyin boshlanmoqda…' : '⏳ Yana ' + (N - filled) + ' kishi kerak. ' + N + ' kishi yigʻilsa, oʻyin boshlanadi.');
     } else {
       L.push('🎲 ' + room.round + '-raund ' + (room.phase === 'playing' ? 'ketmoqda' : 'tugadi'));
       // 12 ballda turgan jamoa — shans raundida
@@ -122,7 +123,7 @@ function createBot(opts) {
   }
 
   function tableKeyboard(room, isPrivate) {
-    const open = room.phase === 'lobby' && room.seats.filter(Boolean).length < 4 ? '🎮 Oʻyinga kirish' : '👀 Stolni ochish';
+    const open = room.phase === 'lobby' && room.seats.filter(Boolean).length < room.seats.length ? '🎮 Oʻyinga kirish' : '👀 Stolni ochish';
     const rows = [[{ text: open, url: bot.appLink(room.id) }]];
     if (isPrivate) rows.push([{ text: '📨 Doʻstlarni chaqirish', url: bot.shareLink(room.id) }]);
     return { inline_keyboard: rows };
@@ -149,9 +150,10 @@ function createBot(opts) {
   function tableLine(r) {
     const n = r.seats.filter(Boolean).length;
     let st;
-    if (r.phase === 'lobby') st = n >= 4 ? '⏳ boshlanmoqda' : '⏳ odam kutilmoqda (' + n + '/4)';
+    if (r.phase === 'lobby') st = n >= r.size ? '⏳ boshlanmoqda' : '⏳ odam kutilmoqda (' + n + '/' + r.size + ')';
     else st = (r.phase === 'roundEnd' ? '⏸ ' : '🎲 ') + r.round + '-raund · hisob ' + r.score[0] + ':' + r.score[1];
     const extra = r.spectators.size ? ' · 👀 ' + r.spectators.size : '';
+    if (r.size === 2) return '<b>' + r.no + '-stol</b> · 1×1 · ' + st + extra + '\n' + seatLabel(r.seats[0]) + ' ⚔️ ' + seatLabel(r.seats[1]);
     return '<b>' + r.no + '-stol</b> · ' + st + extra + '\n' +
       '1-jamoa: ' + [r.seats[0], r.seats[2]].map(seatLabel).join(', ') + '\n' +
       '2-jamoa: ' + [r.seats[1], r.seats[3]].map(seatLabel).join(', ');
