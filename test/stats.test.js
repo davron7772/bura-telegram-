@@ -104,3 +104,16 @@ test('Yandex Disk: avval oʻqiydi, keyin yozadi; 404 — yangi fayl', async () =
   assert.deepEqual(users, ['a', 'b']);
   clearTimeout(s1.rtimer); clearTimeout(s3.rtimer);
 });
+
+test('tashriflar: kirishlar, kunlar va oʻynalgan vaqt', () => {
+  let now = Date.UTC(2026, 10, 14, 10);
+  const s = new Stats({ now: () => now });
+  s.visit({ id: 'a', name: 'Ali' }); s.visit({ id: 'a', name: 'Ali' });
+  for (let k = 0; k < 10; k++) s.online({ id: 'a' }, 3 * 60000, true);
+  s.online({ id: 'a' }, 60 * 60000, false); // 5 daqiqadan oshgani kesiladi
+  now += 24 * 3600000; s.visit({ id: 'a', name: 'Ali' }); s.visit({ id: 'b', name: 'Vali' });
+  const t = s.total();
+  assert.equal(t.players, 2); assert.equal(t.visits, 4);
+  const a = s.users.get('a');
+  assert.equal(a.days, 2); assert.equal(a.playMs, 30 * 60000); assert.equal(a.appMs, 35 * 60000);
+});

@@ -226,7 +226,7 @@
       setRoom(m.room, m.invite);
     }
     else if (m.t === 'stats') {
-      S.stats = { list: m.list || [], me: m.me || null, min: m.min || 3 };
+      S.stats = { list: m.list || [], me: m.me || null, min: m.min || 3, total: m.total || null };
       if (S.sheet && S.sheet.type === 'stats') render();
     }
     else if (m.t === 'hall') {
@@ -1229,12 +1229,23 @@
     const d = S.stats;
     let h = '<h2>Oʻyinchilar samaradorligi</h2><p class="sub">Har bir yurish tahlil qilinadi. Samaradorlik = toʻgʻri yurishlar (50%) + olingan ochko (25%) + yutilgan raundlar (25%).</p>';
     if (!d) return h + '<p class="status">Yuklanmoqda…</p>';
+    const T = d.total;
+    if (T && T.players) {
+      const since = T.since ? new Date(T.since) : null;
+      h += '<div class="eff-total">' +
+        '<span><b>' + T.players + '</b><small>akkaunt</small></span>' +
+        '<span><b>' + T.visits + '</b><small>marta kirildi</small></span>' +
+        '<span><b>' + T.rounds + '</b><small>raund</small></span>' +
+        '<span><b>' + T.playH + '</b><small>soat oʻyin</small></span>' +
+        (since ? '<em>' + since.getDate() + '.' + String(since.getMonth() + 1).padStart(2, '0') + '.' + since.getFullYear() + ' dan beri</em>' : '') + '</div>';
+    }
     const row = function (u, i) {
       const lvl = u.eff >= 70 ? 'hi' : u.eff >= 50 ? 'mid' : 'lo';
       return '<li class="eff-row' + (d.me && d.me.id === u.id ? ' me' : '') + (u.ranked ? '' : ' new') + '">' +
         '<span class="eff-n">' + (u.ranked ? i + 1 : '·') + '</span>' +
         '<span class="eff-who"><b>' + esc(u.name) + (d.me && d.me.id === u.id ? ' <i>(siz)</i>' : '') + '</b>' +
         '<small>' + u.rounds + ' raund · toʻgʻri yurish ' + u.acc + '% · yutish ' + u.win + '% · oʻrtacha ' + u.avg + ' ochko</small>' +
+        (u.visits ? '<small>' + u.visits + ' marta kirgan · ' + u.days + ' kun · ' + u.playH + ' soat oʻynagan</small>' : '') +
         '<span class="eff-bar"><span class="' + lvl + '" style="width:' + u.eff + '%"></span></span></span>' +
         '<span class="eff-p ' + lvl + '">' + (u.ranked ? u.eff + '%' : '—') + '</span></li>';
     };

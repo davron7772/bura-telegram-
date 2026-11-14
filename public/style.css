@@ -876,3 +876,7 @@ button.hs:focus-visible { outline: 2px solid #fff; outline-offset: 2px; border-r
 .v3d .hand.spect .card:nth-child(1) { --i: 0; } .v3d .hand.spect .card:nth-child(2) { --i: 1; } .v3d .hand.spect .card:nth-child(3) { --i: 2; } .v3d .hand.spect .card:nth-child(4) { --i: 3; }
 .modes.view { margin: 0 0 12px; }
 .modes.view + .toggle { margin-bottom: 18px; }
+.eff-total { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 4px 0 12px; padding: 12px 8px 8px; border-radius: 14px; background: rgba(247, 236, 223, .06); text-align: center; }
+.eff-total span b { display: block; font: 800 22px var(--serif); color: var(--saffron); }
+.eff-total span small { display: block; font-size: 12px; color: var(--muted); line-height: 1.2; }
+.eff-total em { grid-column: 1 / -1; font-style: normal; font-size: 12px; color: var(--muted); }

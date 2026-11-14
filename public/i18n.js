@@ -17,6 +17,8 @@
 
   // Oʻzgaruvchan matnlar (raqam bilan) — avval shular
   const RULES = [
+    [/(\d+) marta kirgan · (\d+) kun · ([\d.]+) soat oʻynagan/g, (m, a, b, c) => 'заходил ' + a + ' раз · ' + b + ' дн. · играл ' + c + ' ч'],
+    [/(\d+)\.(\d+)\.(\d+) dan beri/g, (m, a, b, c) => 'с ' + a + '.' + b + '.' + c],
     [/Sizning jamoangizga/g, () => 'Вашей команде'],
     [/Raqiblarga/g, () => 'Соперникам'],
     [/Raqibga/g, () => 'Сопернику'],
@@ -421,6 +423,10 @@
     'Koʻrinish': 'Вид',
     'tekis': 'плоский',
     'hajmli stol': 'объёмный стол',
+    'akkaunt': 'аккаунтов',
+    'marta kirildi': 'входов',
+    'raund': 'раундов',
+    'soat oʻyin': 'часов игры',
     'Hamma oʻtirdi!': 'Все за столом!',
     'Stol egasi sizni oʻyindan chiqardi — siz mehmonsiz.': 'Хозяин стола убрал вас из игры — теперь вы гость.',
     'Oʻyindan chiqarish': 'Убрать из игры',

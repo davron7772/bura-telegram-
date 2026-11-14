@@ -132,13 +132,52 @@ P.user = function (who) {
   const id = String(who.id);
   let u = this.users.get(id);
   if (!u) {
-    u = { id: id, name: '', photo: '', rounds: 0, wins: 0, draws: 0, points: 0, fair: 0, good: 0, moves: 0, auto: 0, at: 0 };
+    u = { id: id, name: '', photo: '', rounds: 0, wins: 0, draws: 0, points: 0, fair: 0, good: 0, moves: 0, auto: 0, at: 0,
+      first: this.now(), visits: 0, days: 0, day: '', appMs: 0, playMs: 0 };
     this.users.set(id, u);
   }
   if (who.name) u.name = String(who.name).slice(0, 64);
   if (who.photo) u.photo = String(who.photo).slice(0, 512);
   u.at = this.now();
   return u;
+};
+
+// Ilovaga kirish (har bir ulanish)
+P.visit = function (who) {
+  if (!who || who.bot) return;
+  const u = this.user(who);
+  if (!u.first) u.first = this.now();
+  u.visits = (u.visits || 0) + 1;
+  const day = new Date(this.now() + 5 * 3600 * 1000).toISOString().slice(0, 10); // Toshkent vaqti
+  if (u.day !== day) { u.day = day; u.days = (u.days || 0) + 1; }
+  this.save();
+};
+
+// Ilovada oʻtkazilgan vaqt; seated — stolda oʻtirib oʻynagan vaqt
+P.online = function (who, ms, seated) {
+  if (!who || who.bot || !(ms > 0)) return;
+  ms = Math.min(ms, 5 * 60 * 1000); // uzilish/uyqu boʻlsa — ortiqcha hisoblamaymiz
+  const u = this.users.get(String(who.id));
+  if (!u) return;
+  u.appMs = (u.appMs || 0) + ms;
+  if (seated) u.playMs = (u.playMs || 0) + ms;
+  this.save();
+};
+
+// Umumiy koʻrsatkichlar
+P.total = function () {
+  let t = { players: 0, visits: 0, rounds: 0, appH: 0, playH: 0, since: 0 };
+  for (const u of this.users.values()) {
+    t.players++;
+    t.visits += u.visits || 0;
+    t.rounds += u.rounds || 0;
+    t.appH += (u.appMs || 0) / 3600000;
+    t.playH += (u.playMs || 0) / 3600000;
+    if (u.first && (!t.since || u.first < t.since)) t.since = u.first;
+  }
+  t.appH = Math.round(t.appH * 10) / 10;
+  t.playH = Math.round(t.playH * 10) / 10;
+  return t;
 };
 
 // Bitta yurish
@@ -181,6 +220,9 @@ P.view = function (u) {
     win: u.rounds ? Math.round(((u.wins + u.draws * 0.5) / u.rounds) * 100) : 0,
     avg: u.rounds ? Math.round(u.points / u.rounds) : 0,
     moves: u.moves,
+    visits: u.visits || 0,
+    days: u.days || 0,
+    playH: Math.round(((u.playMs || 0) / 3600000) * 10) / 10,
     ranked: u.rounds >= MIN_ROUNDS
   };
 };

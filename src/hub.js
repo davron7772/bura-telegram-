@@ -57,7 +57,8 @@ class Hub {
   constructor(cfg) {
     this.cfg = cfg;
     this.rooms = new Map();
-    this.stats = cfg.stats || null; // oʻyinchilar samaradorligi
+    this.stats = cfg.stats || null; // oʻyinchilar samaradorligi va tashriflar
+    this.clients = new Set();       // ulangan mijozlar (ilovada oʻtirgan vaqtni hisoblash uchun)
     this.conns = new Map(); // roomId -> Set(conn)
     this.onRoomChange = cfg.onRoomChange || function () {};
     this.onRoomRemoved = cfg.onRoomRemoved || function () {};
@@ -176,9 +177,22 @@ class Hub {
         }
       }, 25000),
       setInterval(() => { for (const r of this.rooms.values()) r.sweep(); }, 5000),
-      setInterval(() => this.gc(false), 60000)
+      setInterval(() => this.gc(false), 60000),
+      setInterval(() => this.tickTime(), 60000)
     ];
     return wss;
+  }
+
+  // Ilovada oʻtkazilgan vaqt: har daqiqada va uzilganda qoʻshib boriladi
+  tickTime(only) {
+    if (!this.stats) return;
+    const now = Date.now();
+    const list = only ? [only] : this.clients;
+    for (const c of list) {
+      if (!c.user || !c.tick) continue;
+      this.stats.online(c.user, now - c.tick, !!(c.room && c.room.seatOf(c.user.id) >= 0));
+      c.tick = now;
+    }
   }
 
   close() {
@@ -208,7 +222,8 @@ class Hub {
       if (!(m.t === 'rtc' ? this.allowRtc(c) : this.allow(c))) return;
       try { this.onMessage(c, m); } catch (e) { console.error('[ws] xato:', e); }
     });
-    ws.on('close', () => { this.detach(c); this.leaveHall(c); });
+    this.clients.add(c);
+    ws.on('close', () => { this.tickTime(c); this.clients.delete(c); this.detach(c); this.leaveHall(c); });
     ws.on('error', () => {});
   }
 
@@ -234,7 +249,7 @@ class Hub {
     if (m.t === 'hall') return this.toHall(c);
     if (m.t === 'stats') {
       if (!this.stats) return this.send(c, { t: 'stats', list: [], me: null, min: 3 });
-      return this.send(c, { t: 'stats', list: this.stats.list(100), me: this.stats.me(c.user.id), min: require('./stats').MIN_ROUNDS });
+      return this.send(c, { t: 'stats', list: this.stats.list(100), me: this.stats.me(c.user.id), min: require('./stats').MIN_ROUNDS, total: this.stats.total() });
     }
     if (m.t === 'join') return this.join(c, m);
     if (!c.room) {
@@ -266,6 +281,7 @@ class Hub {
     if (!user) return this.send(c, { t: 'auth_error', msg: 'Ilovani Telegram orqali oching' });
     if (c.room) this.detach(c);
     this.leaveHall(c);
+    if (this.stats && (!c.user || c.user.id !== user.id)) { this.tickTime(c); this.stats.visit(user); c.tick = Date.now(); }
     c.user = user;
     this.send(c, { t: 'welcome', me: { name: user.name } });
     const ref = String(m.room || startParam || '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 40);
