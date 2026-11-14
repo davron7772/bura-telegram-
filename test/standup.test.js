@@ -202,3 +202,15 @@ test('stol egasi ketsa — undan keyin kirgan oʻyinchi egasi boʻladi', () => {
   r.leave(order[1]);
   assert.equal(r.hostId, order[2]);
 });
+
+test('oʻyinchi oldiga narsa qoʻyadi (viski/sigara/tort/pivo), hamma koʻradi', () => {
+  const { r } = setup(4);
+  const i = r.seats.findIndex((s) => s && s.id === 'u2');
+  assert.equal(r.dispatch('u2', { t: 'item', item: 'whisky' }), null);
+  assert.equal(r.snapshot('u3').seats[i].item, 'whisky');
+  assert.equal(r.dispatch('u2', { t: 'item', item: 'vodka' }), 'Bunday narsa yoʻq');
+  assert.equal(r.dispatch('u2', { t: 'item', item: null }), null);
+  assert.equal(r.snapshot('u1').seats[i].item, null);
+  r.connect({ id: 'w', name: 'W' });
+  assert.equal(r.dispatch('w', { t: 'item', item: 'cake' }), 'Avval stolga oʻtiring');
+});

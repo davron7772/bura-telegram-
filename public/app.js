@@ -396,11 +396,31 @@
   }
   function linkBtn(act, label) { return '<button type="button" class="link" data-act="' + act + '">' + label + '</button>'; }
 
-  function avatarHTML(seat, s, active) {
+  function avatarHTML(seat, s, active, plus) {
     const voice = VC && seat && !seat.bot;
     return '<div class="ava" style="--av:' + AVATAR_BG[s % AVATAR_BG.length] + '"' + (voice ? ' data-vs="' + s + '"' : '') + '><span>' + esc(firstLetter(seat && seat.name)) + '</span>' +
       (seat && seat.photo ? '<img src="' + esc(seat.photo) + '" alt="" referrerpolicy="no-referrer">' : '') +
-      (active ? '<i class="ring"></i>' : '') + (voice ? VBADGE : '') + '</div>';
+      (active ? '<i class="ring"></i>' : '') + (voice ? VBADGE : '') +
+      (plus ? '<i class="plus" aria-hidden="true">+</i>' : '') +
+      (seat && seat.item && ITEMS[seat.item] ? '<i class="itm itm-' + seat.item + '" title="' + ITEMS[seat.item].name + '">' + ITEMS[seat.item].svg + '</i>' : '') + '</div>';
+  }
+
+  // Oʻyinchi oʻz oldiga qoʻyadigan narsalar (poker stolidagidek)
+  const ITEMS = {
+    whisky: { name: 'Viski', svg: '<svg viewBox="0 0 40 40"><path d="M9 12h22l-2.2 21.5a3 3 0 0 1-3 2.5H14.2a3 3 0 0 1-3-2.5z" fill="rgba(230,240,255,.28)" stroke="#e8eef8" stroke-width="1.6"/><path d="M10.4 21h19.2l-1.3 12.4a2 2 0 0 1-2 1.8H13.7a2 2 0 0 1-2-1.8z" fill="#c8741c"/><path d="M10.4 21h19.2l-.2 2H10.6z" fill="#f0a43c"/><rect x="13" y="15.5" width="7" height="7" rx="1.4" fill="rgba(235,248,255,.75)" transform="rotate(-12 16.5 19)"/><rect x="20.5" y="16.5" width="6.5" height="6.5" rx="1.4" fill="rgba(235,248,255,.6)" transform="rotate(10 23.7 19.7)"/><path d="M12.5 14l1.6 18" stroke="#fff" stroke-opacity=".5" stroke-width="1.2" stroke-linecap="round"/></svg>' },
+    cigar: { name: 'Sigara', svg: '<svg viewBox="0 0 40 40"><g class="smoke" fill="none" stroke="#d9d4cc" stroke-width="1.6" stroke-linecap="round" opacity=".7"><path d="M33 20c-2-3 2-5 0-8s2-5 0-8"/><path d="M36 21c-1.5-2.5 1.5-4 0-6.5"/></g><rect x="3" y="22" width="30" height="7" rx="3.5" fill="#7a4524" transform="rotate(-14 18 25.5)"/><rect x="3" y="22" width="30" height="2.4" rx="1.2" fill="#a5643a" transform="rotate(-14 18 25.5)"/><rect x="10" y="21.4" width="4" height="8.2" fill="#c8102e" transform="rotate(-14 18 25.5)"/><rect x="10.8" y="21.4" width="2.4" height="8.2" fill="#f0b43c" transform="rotate(-14 18 25.5)"/><circle cx="33.2" cy="21.3" r="3.2" fill="#ff7a3c"/><circle cx="33.6" cy="21" r="1.8" fill="#ffd27a"/></svg>' },
+    cake: { name: 'Tort', svg: '<svg viewBox="0 0 40 40"><ellipse cx="20" cy="34" rx="16" ry="3.5" fill="#e8e2d6"/><path d="M6 17l28-6v20H6z" fill="#7a3b23"/><path d="M6 23.5l28-2.5v3.2L6 26.6z" fill="#f6e7c8"/><path d="M6 17l28-6v3.2L6 20.2z" fill="#fbf2e2"/><path d="M6 17l28-6 2 1.6-28.6 6.1z" fill="#fff"/><path d="M8 18.5c1.8 1.6 3.6 1.6 5.4 0s3.6-1.6 5.4 0 3.6 1.6 5.4 0 3.6-1.6 5.4 0" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/><circle cx="25" cy="9.6" r="3.4" fill="#d0182f"/><path d="M25 6.4c.6-2.2 2.2-3.6 4-4" stroke="#3a6b2a" stroke-width="1.2" fill="none" stroke-linecap="round"/><circle cx="24" cy="8.6" r="1" fill="#fff" opacity=".7"/></svg>' },
+    beer: { name: 'Pivo', svg: '<svg viewBox="0 0 40 40"><path d="M16.5 3h7v6.5c0 2.5 4 4.5 4 9.5v15.5a2.5 2.5 0 0 1-2.5 2.5H15a2.5 2.5 0 0 1-2.5-2.5V19c0-5 4-7 4-9.5z" fill="rgba(255,220,120,.35)" stroke="#f3e6c0" stroke-width="1.4"/><path d="M13.3 20h13.4v14.5a1.8 1.8 0 0 1-1.8 1.8h-9.8a1.8 1.8 0 0 1-1.8-1.8z" fill="#f2c040"/><rect x="13.3" y="23" width="13.4" height="8" fill="#fbf7ef"/><path d="M15.5 27h9" stroke="#2148a3" stroke-width="1.6"/><rect x="16" y="2" width="8" height="2.6" rx="1" fill="#d9d9d9"/><path d="M22 3.5a6 6 0 0 1 8.5 1.2L24 9z" fill="#7bc142"/><path d="M23.3 4.2a4.4 4.4 0 0 1 5.6.9L24 8z" fill="#d8f0a8"/><path d="M15 11c-.8 3-1.6 5-1.6 8" stroke="#fff" stroke-opacity=".55" stroke-width="1.2" fill="none" stroke-linecap="round"/></svg>' }
+  };
+  function itemsHTML() {
+    const r = S.room, me = r && r.mySeat >= 0 ? r.seats[r.mySeat] : null, cur = me && me.item;
+    let h = '<h2>Oldingizga nima qoʻyasiz?</h2><p class="sub">Stoldagilarning hammasi koʻradi.</p><div class="items">';
+    Object.keys(ITEMS).forEach(function (k) {
+      h += '<button type="button" class="item' + (cur === k ? ' on' : '') + '" data-act="setitem" data-item="' + k + '" aria-pressed="' + (cur === k) + '">' +
+        '<span class="ipic">' + ITEMS[k].svg + '</span><b>' + ITEMS[k].name + '</b></button>';
+    });
+    h += '</div><div class="lobby-actions">' + (cur ? btn('setitem', 'Olib qoʻyish', 'secondary') : '') + btn('close', 'Yopish', 'primary') + '</div>';
+    return h;
   }
 
   function heroHTML(load, mini) {
@@ -805,7 +825,7 @@
       const d = duel(r);
       let help = g.teamCards ? (d ? 'Olganingiz: ' : 'Jamoa olgan: ') + g.teamCards + ' ta karta' : (d ? 'Hali karta olmadingiz' : 'Jamoangiz hali karta olmadi');
       if (g.teamCards && g.teamKnown != null) help = (d ? 'Sizda: <b>' : 'Jamoa: <b>') + g.teamKnown + '</b> ochiq ochko' + (g.teamHidden ? ', ' + g.teamHidden + ' ta yopiq' : '');
-      h += '<div class="mebar' + (myTurn ? ' turn' : '') + '"><span><b>Siz</b></span><span class="help">' + help + '</span></div>';
+      h += '<div class="mebar' + (myTurn ? ' turn' : '') + '"><span class="mewho"><button type="button" class="seat-tap meava" data-act="items" aria-label="Oldingizga narsa qoʻyish">' + avatarHTML(r.seats[me], me, false, true) + '</button><b>Siz</b></span><span class="help">' + help + '</span></div>';
     } else if (!r.seats[0]) {
       h += '<div class="mebar"><span><b>Boʻsh oʻrin</b> · ' + (r.myTeam >= 0 ? '' : '1-jamoa') + '</span>' +
         '<button type="button" class="mini-btn inv" data-act="sit" data-seat="0">Oʻtirish</button></div>';
@@ -1086,6 +1106,7 @@
       case 'result': body = r && r.result ? resultHTML(r) : ''; break;
       case 'create': body = createHTML(); break;
       case 'stats': body = statsHTML(); break;
+      case 'items': body = itemsHTML(); break;
     }
     if (!body) return '';
     return '<div class="sheet-wrap' + (S.sheetAnim && !reduceMotion ? ' anim' : '') + '" data-act="backdrop"><div class="sheet" role="dialog" aria-modal="true">' +
@@ -1341,6 +1362,8 @@
       case 'lead': case 'beat': case 'discard': return play(act);
       case 'menu': return openSheet('menu');
       case 'rules': return openSheet('rules');
+      case 'items': return openSheet('items');
+      case 'setitem': send({ t: 'item', item: el.getAttribute('data-item') || null }); S.sheet = null; return render();
       case 'stats': S.stats = null; send({ t: 'stats' }); return openSheet('stats');
       case 'result': return openSheet('result');
       case 'close':

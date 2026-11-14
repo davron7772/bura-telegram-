@@ -124,7 +124,18 @@
     });
   };
 
-  P.fixHost = function () {
+  // Oʻyinchi oʻz oldiga qoʻyadigan narsa (poker stolidagidek): viski, sigara, tort, pivo
+const ITEMS = ['whisky', 'cigar', 'cake', 'beer'];
+P.setItem = function (uid, item) {
+  const i = this.seatOf(uid);
+  if (i < 0) return 'Avval stolga oʻtiring';
+  if (item != null && ITEMS.indexOf(item) < 0) return 'Bunday narsa yoʻq';
+  this.seats[i].item = item || null;
+  this.changed();
+  return null;
+};
+
+P.fixHost = function () {
     const self = this;
     const ok = this.seats.some(function (s) { return s && !s.bot && !s.auto && s.id === self.hostId; });
     if (!ok) {
@@ -216,6 +227,7 @@
       case 'kick': return this.kick(uid, m.seat);
       case 'start': return this.start(uid);
       case 'ready': return this.setReady(uid);
+      case 'item': return this.setItem(uid, m.item);
       case 'act': return this.act(uid, m.action);
       case 'next': return this.nextRound(uid);
       case 'lobby': return this.backToLobby(uid);
@@ -673,7 +685,8 @@
           host: s.id === self.hostId,
           you: s.id === uid,
           team: E.teamOf(i),
-          ready: !!(s.bot || s.ready)
+          ready: !!(s.bot || s.ready),
+          item: s.item || null
         };
       }),
       readyIn: this.readyAt ? Math.max(0, this.readyAt - this.now()) : 0,
