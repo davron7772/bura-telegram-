@@ -62,13 +62,14 @@ const { Stats } = require('./src/stats');
 const { YaDisk } = require('./src/yadisk');
 const yaToken = (process.env.YANDEX_DISK_TOKEN || '').trim();
 const stats = new Stats({
-  file: path.join(process.env.DATA_DIR || path.join(__dirname, 'data'), 'stats.json'),
+  // Render Disk /var/data ga ulangan — u boʻlsa, statistika oʻsha yerda (qayta ishga tushsa ham saqlanadi)
+  file: path.join(process.env.DATA_DIR || (require('fs').existsSync('/var/data') ? '/var/data' : path.join(__dirname, 'data')), 'stats.json'),
   remote: yaToken ? new YaDisk({ token: yaToken }) : null
 });
 if (yaToken) {
   stats.loadRemote().then(function () { console.log('[stats] Yandex Diskdan yuklandi:', stats.users.size, 'oʻyinchi'); })
     .catch(function (e) { console.error('[stats] Yandex Diskdan yuklab boʻlmadi:', e.message); });
-} else console.log('[stats] YANDEX_DISK_TOKEN yoʻq — statistika faqat server xotirasida');
+} else console.log('[stats] fayl:', stats.file, '—', stats.users.size, 'oʻyinchi');
 const hub = new Hub({
   stats: stats,
   botToken: cfg.botToken,
