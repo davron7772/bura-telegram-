@@ -17,7 +17,10 @@
 
   // Oʻzgaruvchan matnlar (raqam bilan) — avval shular
   const RULES = [
-    [/Tayyorlik · (\d)\/4/g, (m, n) => 'Готовность · ' + n + '/4'],
+    [/(\d+) raund · toʻgʻri yurish (\d+)% · yutish (\d+)% · oʻrtacha (\d+) ochko/g, (m, a, b, c, d) => a + ' раунд. · верные ходы ' + b + '% · победы ' + c + '% · в среднем ' + d + ' оч.'],
+    [/Reytingga kirish uchun kamida (\d+) raund oʻynang/g, (m, n) => 'Чтобы попасть в рейтинг, сыграйте минимум ' + n + ' раунда'],
+    [/«—» — hali (\d+) raunddan kam oʻynagan\. Botlar hisoblanmaydi\./g, (m, n) => '«—» — сыграно меньше ' + n + ' раундов. Боты не учитываются.'],
+    [/Tayyorlik · (\d)\/(\d)/g, (m, n, k) => 'Готовность · ' + n + '/' + k],
     [/Hamma (\d+) tadan karta tashlaydi/g, (m, n) => 'Все кладут по ' + n + ' ' + pl(n, 'карте', 'карты', 'карт')],
     [/(\d+) ta karta bilan yurdingiz/g, (m, n) => 'ходите ' + kartI(n)],
     [/(\d+) ta karta bilan yurdi/g, (m, n) => 'ходит ' + kartI(n)],
@@ -395,6 +398,14 @@
     'Hali karta olmadingiz': 'Вы ещё не взяли карт',
     'Raqib': 'Соперник',
     'Ikkalangiz ham ': 'Вы оба на ',
+    'Oʻyinchilar samaradorligi': 'Эффективность игроков',
+    'Hamma oʻyinchilarning oʻyin tahlili': 'Разбор игры всех игроков',
+    'Har bir yurish tahlil qilinadi. Samaradorlik = toʻgʻri yurishlar (50%) + olingan ochko (25%) + yutilgan raundlar (25%).': 'Каждый ход анализируется. Эффективность = верные ходы (50%) + взятые очки (25%) + выигранные раунды (25%).',
+    'Sizning samaradorligingiz': 'Ваша эффективность',
+    'Hali statistika yoʻq — bir necha raund oʻynang.': 'Статистики пока нет — сыграйте несколько раундов.',
+    'Yuklanmoqda…': 'Загрузка…',
+    'Orqaga': 'Назад',
+    '(siz)': '(вы)',
     'Hamma oʻtirdi!': 'Все за столом!',
     'Stol egasi sizni oʻyindan chiqardi — siz mehmonsiz.': 'Хозяин стола убрал вас из игры — теперь вы гость.',
     'Oʻyindan chiqarish': 'Убрать из игры',

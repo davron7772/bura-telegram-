@@ -57,6 +57,7 @@ class Hub {
   constructor(cfg) {
     this.cfg = cfg;
     this.rooms = new Map();
+    this.stats = cfg.stats || null; // oʻyinchilar samaradorligi
     this.conns = new Map(); // roomId -> Set(conn)
     this.onRoomChange = cfg.onRoomChange || function () {};
     this.onRoomRemoved = cfg.onRoomRemoved || function () {};
@@ -88,6 +89,7 @@ class Hub {
     const g = opts.group ? this.ensureGroup(opts.chatId, opts.title) : opts.solo ? null : this.publicHall();
     const room = new Room({
       id: id,
+      stats: this.stats,
       chatId: opts.chatId || null,
       title: opts.title || '',
       groupKey: g ? g.key : null,
@@ -230,6 +232,10 @@ class Hub {
     if (!c.user) return this.send(c, { t: 'error', msg: 'Avval tizimga kiring' });
     if (m.t === 'create') return this.createFor(c, m);
     if (m.t === 'hall') return this.toHall(c);
+    if (m.t === 'stats') {
+      if (!this.stats) return this.send(c, { t: 'stats', list: [], me: null, min: 3 });
+      return this.send(c, { t: 'stats', list: this.stats.list(100), me: this.stats.me(c.user.id), min: require('./stats').MIN_ROUNDS });
+    }
     if (m.t === 'join') return this.join(c, m);
     if (!c.room) {
       if (m.t === 'voice_join') return this.send(c, { t: 'voice_end', reason: 'noroom' });

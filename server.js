@@ -56,7 +56,12 @@ const TYPES = {
 
 let bot = null;
 
+const { Stats } = require('./src/stats');
+// Statistika fayli: DATA_DIR (masalan Render Disk: /var/data) yoki ./data
+const stats = new Stats({ file: path.join(process.env.DATA_DIR || path.join(__dirname, 'data'), 'stats.json') });
+process.on('SIGTERM', function () { stats.flush(); });
 const hub = new Hub({
+  stats: stats,
   botToken: cfg.botToken,
   devMode: cfg.devMode,
   turnSeconds: cfg.turnSeconds,

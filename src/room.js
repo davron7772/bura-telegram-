@@ -64,6 +64,7 @@
     this.deadline = 0;
     this.deadlineTotal = 0;
     this.botSeq = 0;
+    this.stats = o.stats || null; // samaradorlik statistikasi (server)
     this.joinSeq = 0;       // stolga oʻtirish tartibi (stol egasi ketsa — keyingi kelgan egasi boʻladi)
     this.kickedOut = null;  // { at, id } — stol egasi chiqargan oʻyinchi
     this.resumeAsk = false;   // oʻyin oʻrtasida boʻshagan oʻrin toʻldi: stol egasi davom ettirish yoki yangidan boshlashni tanlaydi
@@ -478,8 +479,10 @@
       type: String(action.type || ''),
       cards: Array.isArray(action.cards) ? action.cards.slice(0, 4).map(String) : []
     };
+    const pre = this.stats ? { phase: this.game.phase, turn: this.game.turn, trump: this.game.trump, trick: this.game.trick && { best: this.game.trick.best, plays: this.game.trick.plays.slice() }, hands: this.game.hands.map(function (h) { return h.slice(); }) } : null;
     const res = E.act(this.game, i, a);
     if (!res.ok) return res.error;
+    if (pre) this.stats.check(pre, i, a, false, this.seats[i]);
     const s = this.seats[i];
     if (s.auto) { s.auto = false; this.fixHost(); }
     this.setEvents(res.events);
@@ -505,6 +508,13 @@
     if (matchLoser >= 0) {
       this.matchOver = true;
       this.matchWins[1 - matchLoser]++;
+    }
+    if (this.stats) {
+      for (let k = 0; k < this.size; k++) {
+        const s = this.seats[k];
+        if (!s || s.bot) continue;
+        this.stats.round(s, { won: E.teamOf(k) === r.team, draw: draw, points: E.seatPoints(this.game, k), n: this.size });
+      }
     }
     this.phase = 'roundEnd';
     this.lastResult = Object.assign({}, E.resultView(this.game), {
@@ -607,7 +617,9 @@
       // vaqt tugasa — chap tarafdagi kartalar; bot va chiqib ketganlar oʻrniga — kompyuter oʻyinchisi
       const a = (kind === 'timeout' && E.autoMove(g, seatIdx)) || E.AI.choose(g, seatIdx, {});
       if (a) {
+        const who = this.seats[seatIdx];
         const r = E.act(g, seatIdx, a);
+        if (r.ok && this.stats && who && !who.bot && kind === 'timeout') this.stats.check(null, seatIdx, a, true, who);
         if (r.ok) {
           if (kind === 'timeout' && r.events.length) r.events[0] = Object.assign({}, r.events[0], { auto: true });
           this.setEvents(r.events);

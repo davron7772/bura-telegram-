@@ -214,6 +214,10 @@
       }
       setRoom(m.room, m.invite);
     }
+    else if (m.t === 'stats') {
+      S.stats = { list: m.list || [], me: m.me || null, min: m.min || 3 };
+      if (S.sheet && S.sheet.type === 'stats') render();
+    }
     else if (m.t === 'hall') {
       S.hall = m.hall; S.busy = false;
       // out — stoldan chiqib zalga oʻtdik; aks holda stol (lobbi) ichidamiz va zal shunchaki yangilandi
@@ -566,7 +570,8 @@
     if (!list.length) html += '<p class="hall-empty">Hali hech kim oʻynamayapti. Birinchi stolni oching — boshqalar uni shu yerda koʻrib, qoʻshiladi.</p>';
     else html += '<p class="hall-hint">Istalgan stoldagi boʻsh oʻringa bosing — oʻsha jamoaga oʻtirasiz. Oʻyin ketayotgan stolni kuzatishingiz mumkin.</p>';
     html += '<div class="tables">' + sorted.map(hallCard).join('') + '</div>';
-    html += '<div class="hall-actions">' + btn('hnew', '+ Yangi stol ochish', list.length ? 'secondary wide' : 'primary wide', S.busy) + '</div>';
+    html += '<div class="hall-actions">' + btn('hnew', '+ Yangi stol ochish', list.length ? 'secondary wide' : 'primary wide', S.busy) +
+      (DEMO ? '' : '<button type="button" class="effbtn" data-act="stats"><span class="effico" aria-hidden="true">%</span><span><b>Oʻyinchilar samaradorligi</b><small>Hamma oʻyinchilarning oʻyin tahlili</small></span></button>') + '</div>';
     if (inRoom && !DEMO) html += '<div class="hall-set">' + skinToggle() + '</div>';
     if (inRoom) html += readyBarHTML(S.room);
     return html + '</div>';
@@ -1080,6 +1085,7 @@
         btn('continue', 'Davom ettirish', 'primary') + btn('restart', 'Yangidan boshlash', 'secondary') + '</div>' : ''; break;
       case 'result': body = r && r.result ? resultHTML(r) : ''; break;
       case 'create': body = createHTML(); break;
+      case 'stats': body = statsHTML(); break;
     }
     if (!body) return '';
     return '<div class="sheet-wrap' + (S.sheetAnim && !reduceMotion ? ' anim' : '') + '" data-act="backdrop"><div class="sheet" role="dialog" aria-modal="true">' +
@@ -1148,7 +1154,15 @@
   }
 
   function menuHTML(r) {
-    let h = '<div class="langrow">' + langHTML() + '</div><h2>Hisob</h2><p class="sub">' + (r.round ? r.round + '-raund. Raundda yutqazgan jamoaga ball yoziladi; ' + r.lose + ' ballga yetgan jamoa matchni boy beradi.' : 'Oʻyin hali boshlanmadi') + '</p>' + teamsHTML(r, null);
+    // Yuqorida — bosiladigan tugmalar; pastda — oʻyin haqidagi maʼlumot
+    let h = '<div class="langrow">' + langHTML() + '</div>' + readyBarHTML(r) + '<div class="lobby-actions menu-top">';
+    if (r.group) h += btn('tohall', 'Barcha stollar (zal)', 'secondary');
+    if (r.mySeat >= 0 && !r.seats[r.mySeat].auto && r.phase !== 'lobby') h += btn('leave', 'Stoldan turish', 'danger');
+    if (r.isHost && r.phase === 'roundEnd') h += btn('lobby', 'Lobbiga qaytish (yangi match)', 'secondary');
+    if (!DEMO) h += btn('share', 'Doʻstlarni chaqirish', 'secondary');
+    h += btn('rules', 'Qoidalar', 'secondary') + '</div>';
+    h += '<button type="button" class="effbtn" data-act="stats"><span class="effico" aria-hidden="true">%</span><span><b>Oʻyinchilar samaradorligi</b><small>Hamma oʻyinchilarning oʻyin tahlili</small></span></button>';
+    h += '<h2>Hisob</h2><p class="sub">' + (r.round ? r.round + '-raund. Raundda yutqazgan jamoaga ball yoziladi; ' + r.lose + ' ballga yetgan jamoa matchni boy beradi.' : 'Oʻyin hali boshlanmadi') + '</p>' + teamsHTML(r, null);
     const note = edgeNote(r);
     if (note) h += '<p class="match edge">' + note + '</p>';
     if (r.drawBonus) h += '<p class="match">Oldingi raund durang: bu raundda yutqazgan jamoaga yana +' + r.drawBonus + ' ball qoʻshiladi.</p>';
@@ -1158,15 +1172,31 @@
         '<p class="vnote">Ovoz imkon boʻlsa toʻgʻridan-toʻgʻri, boʻlmasa server orqali uzatiladi va yozib olinmaydi. Bir-biringizni eshitish uchun hamma 🎙 tugmasini bosishi kerak. Bir xonada oʻtirgan boʻlsangiz, quloqchin taqing — aks holda ovoz qaytadi.</p>';
     }
     if (!DEMO) h += skinToggle();
-    h += readyBarHTML(r);
-    h += '<div class="lobby-actions">';
-    if (r.group) h += btn('tohall', 'Barcha stollar (zal)', 'secondary');
-    h += btn('rules', 'Qoidalar', 'secondary');
-    if (!DEMO) h += btn('share', 'Doʻstlarni chaqirish', 'secondary');
-    if (r.mySeat >= 0 && !r.seats[r.mySeat].auto && r.phase !== 'lobby') h += btn('leave', 'Stoldan turish', 'danger');
-    if (r.isHost && r.phase === 'roundEnd') h += btn('lobby', 'Lobbiga qaytish (yangi match)', 'secondary');
-    h += btn('close', 'Yopish', 'primary') + '</div>';
+    h += '<div class="lobby-actions">' + btn('close', 'Yopish', 'primary') + '</div>';
     return h;
+  }
+
+  // Oʻyinchilar samaradorligi (server tahlili)
+  function statsHTML() {
+    const d = S.stats;
+    let h = '<h2>Oʻyinchilar samaradorligi</h2><p class="sub">Har bir yurish tahlil qilinadi. Samaradorlik = toʻgʻri yurishlar (50%) + olingan ochko (25%) + yutilgan raundlar (25%).</p>';
+    if (!d) return h + '<p class="status">Yuklanmoqda…</p>';
+    const row = function (u, i) {
+      const lvl = u.eff >= 70 ? 'hi' : u.eff >= 50 ? 'mid' : 'lo';
+      return '<li class="eff-row' + (d.me && d.me.id === u.id ? ' me' : '') + (u.ranked ? '' : ' new') + '">' +
+        '<span class="eff-n">' + (u.ranked ? i + 1 : '·') + '</span>' +
+        '<span class="eff-who"><b>' + esc(u.name) + (d.me && d.me.id === u.id ? ' <i>(siz)</i>' : '') + '</b>' +
+        '<small>' + u.rounds + ' raund · toʻgʻri yurish ' + u.acc + '% · yutish ' + u.win + '% · oʻrtacha ' + u.avg + ' ochko</small>' +
+        '<span class="eff-bar"><span class="' + lvl + '" style="width:' + u.eff + '%"></span></span></span>' +
+        '<span class="eff-p ' + lvl + '">' + (u.ranked ? u.eff + '%' : '—') + '</span></li>';
+    };
+    if (d.me) h += '<div class="eff-me"><span>Sizning samaradorligingiz</span><b>' + (d.me.ranked ? d.me.eff + '%' : '—') + '</b>' +
+      (d.me.ranked ? '' : '<small>Reytingga kirish uchun kamida ' + d.min + ' raund oʻynang</small>') + '</div>';
+    if (!d.list.length) return h + '<p class="status">Hali statistika yoʻq — bir necha raund oʻynang.</p>';
+    let n = 0;
+    h += '<ol class="eff-list">' + d.list.map(function (u) { return row(u, u.ranked ? n++ : 0); }).join('') + '</ol>';
+    h += '<p class="note">«—» — hali ' + d.min + ' raunddan kam oʻynagan. Botlar hisoblanmaydi.</p>';
+    return h + '<div class="lobby-actions">' + (S.room ? btn('menu', 'Orqaga', 'secondary') : btn('close', 'Yopish', 'primary')) + '</div>';
   }
 
   // Yutqazgan jamoaga nega shuncha ball yozilgani
@@ -1311,6 +1341,7 @@
       case 'lead': case 'beat': case 'discard': return play(act);
       case 'menu': return openSheet('menu');
       case 'rules': return openSheet('rules');
+      case 'stats': S.stats = null; send({ t: 'stats' }); return openSheet('stats');
       case 'result': return openSheet('result');
       case 'close':
         if (S.sheet && S.sheet.type === 'result' && r) S.resultClosedFor = r.round;
