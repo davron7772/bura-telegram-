@@ -27,6 +27,15 @@
     applySkin();
   }
   applySkin();
+  // Koʻrinish: 3D (hajmli stol) yoki 2D (tekis) — har bir qurilmada alohida
+  let VIEW = (function () { try { return localStorage.getItem('bura.view') === '2d' ? '2d' : '3d'; } catch (e) { return '3d'; } })();
+  function applyView() { document.documentElement.classList.toggle('v3d', VIEW === '3d'); }
+  function setView(v) {
+    VIEW = v === '2d' ? '2d' : '3d';
+    try { localStorage.setItem('bura.view', VIEW); } catch (e) { /* */ }
+    applyView();
+  }
+  applyView();
   const TGW = window.Telegram && window.Telegram.WebApp;
   const TG = TGW && TGW.initData ? TGW : null;
   const qs = new URLSearchParams(location.search);
@@ -41,6 +50,8 @@
   const SUIT_CHAR = { S: '♠\uFE0E', H: '♥\uFE0E', D: '♦\uFE0E', C: '♣\uFE0E' };
   const POS = ['b', 'l', 't', 'r']; // men, chapdagi raqib, sherik (roʻparada), oʻngdagi raqib
   const AVATAR_BG = ['#2a2f57', '#7a2a31', '#1f4a4f', '#5b4223'];
+  // 3D stol (yogʻoch hoshiya, tilla chiziq, movut) — faqat 3D koʻrinishda chiqadi
+  const T3D = '<div class="t3d" aria-hidden="true"><div class="t3-in"><i class="t3-thick"></i><i class="t3-rim"></i><i class="t3-felt"><b>BURA</b></i></div></div>';
   const GUL = '<svg class="gul" viewBox="0 0 240 150" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2">' +
     '<path d="M84 8h72l52 34v66l-52 34H84L32 108V42z"/><path d="M92 24h56l38 24v54l-38 24H92L54 102V48z"/>' +
     '<path d="M120 38l30 37-30 37-30-37z"/><path d="M120 58l14 17-14 17-14-17z" fill="currentColor"/>' +
@@ -708,7 +719,7 @@
 
     let h = '<header class="bar"><button type="button" class="icon" data-act="menu" aria-label="Menyu">' + iconSvg('i-menu') + '</button>' +
       '<div class="title"><b>' + (r.no ? r.no + '-stol' : 'Bura') + '</b><span>' + r.round + '-raund</span></div>' + micHTML('') + scoreChip(r) + '</header>';
-    h += '<section class="field">' + GUL + '<div class="opps">' + ['l', 't', 'r'].map(function (p) { return oppHTML(r, seatAt[p], p); }).join('') + '</div>';
+    h += '<section class="field">' + GUL + T3D + '<div class="opps">' + ['l', 't', 'r'].map(function (p) { return oppHTML(r, seatAt[p], p); }).join('') + '</div>';
     h += '<div class="trick" id="trick">';
     ['l', 't', 'r'].forEach(function (p) { h += slotHTML(r, p, seatAt[p], plays); });
     h += '<div class="cell">' + deckHTML(g) + '</div>';
@@ -730,6 +741,14 @@
         return '<span class="wav" style="--av:' + AVATAR_BG[(i + 1) % AVATAR_BG.length] + '"><span>' + esc(firstLetter(x.name)) + '</span>' +
           (x.photo ? '<img src="' + esc(x.photo) + '" alt="" referrerpolicy="no-referrer">' : '') + '</span>';
       }).join('') + '</span><small>👀 ' + (w.length === 1 ? esc(names[0]) : w.length + ' kishi') + '</small></button>';
+  }
+
+  // Koʻrinish tanlovi (menyuda)
+  function viewToggle() {
+    const b = function (v, t, sub) {
+      return '<button type="button" class="mode' + (VIEW === v ? ' on' : '') + '" data-act="view" data-v="' + v + '" aria-pressed="' + (VIEW === v) + '"><span class="vico vico-' + v + '" aria-hidden="true"></span><b>' + t + '</b><small>' + sub + '</small></button>';
+    };
+    return '<div class="modes view" role="group" aria-label="Koʻrinish">' + b('2d', '2D', 'tekis') + b('3d', '3D', 'hajmli stol') + '</div>';
   }
 
   function skinToggle() {
@@ -1191,6 +1210,7 @@
     if (!DEMO) h += btn('share', 'Doʻstlarni chaqirish', 'secondary');
     h += btn('rules', 'Qoidalar', 'secondary') + '</div>';
     h += '<button type="button" class="effbtn" data-act="stats"><span class="effico" aria-hidden="true">%</span><span><b>Oʻyinchilar samaradorligi</b><small>Hamma oʻyinchilarning oʻyin tahlili</small></span></button>';
+    h += viewToggle() + (DEMO ? '' : skinToggle());
     h += '<h2>Hisob</h2><p class="sub">' + (r.round ? r.round + '-raund. Raundda yutqazgan jamoaga ball yoziladi; ' + r.lose + ' ballga yetgan jamoa matchni boy beradi.' : 'Oʻyin hali boshlanmadi') + '</p>' + teamsHTML(r, null);
     const note = edgeNote(r);
     if (note) h += '<p class="match edge">' + note + '</p>';
@@ -1200,7 +1220,6 @@
       h += '<h3>Ovozli chat</h3><div data-vpanel>' + voicePanelHTML() + '</div>' +
         '<p class="vnote">Ovoz imkon boʻlsa toʻgʻridan-toʻgʻri, boʻlmasa server orqali uzatiladi va yozib olinmaydi. Bir-biringizni eshitish uchun hamma 🎙 tugmasini bosishi kerak. Bir xonada oʻtirgan boʻlsangiz, quloqchin taqing — aks holda ovoz qaytadi.</p>';
     }
-    if (!DEMO) h += skinToggle();
     h += '<div class="lobby-actions">' + btn('close', 'Yopish', 'primary') + '</div>';
     return h;
   }
@@ -1371,6 +1390,7 @@
       case 'menu': return openSheet('menu');
       case 'rules': return openSheet('rules');
       case 'items': return openSheet('items');
+      case 'view': setView(el.getAttribute('data-v')); return render();
       case 'setitem': send({ t: 'item', item: el.getAttribute('data-item') || null }); S.sheet = null; return render();
       case 'stats': S.stats = null; send({ t: 'stats' }); return openSheet('stats');
       case 'result': return openSheet('result');

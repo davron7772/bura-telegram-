@@ -17,6 +17,10 @@
 
   // Oʻzgaruvchan matnlar (raqam bilan) — avval shular
   const RULES = [
+    [/Sizning jamoangizga/g, () => 'Вашей команде'],
+    [/Raqiblarga/g, () => 'Соперникам'],
+    [/Raqibga/g, () => 'Сопернику'],
+    [/(^|[^A-Za-zʻ])Sizga(?![a-zʻ])/g, (m, a) => a + 'Вам'],
     [/(\d+) raund · toʻgʻri yurish (\d+)% · yutish (\d+)% · oʻrtacha (\d+) ochko/g, (m, a, b, c, d) => a + ' раунд. · верные ходы ' + b + '% · победы ' + c + '% · в среднем ' + d + ' оч.'],
     [/Reytingga kirish uchun kamida (\d+) raund oʻynang/g, (m, n) => 'Чтобы попасть в рейтинг, сыграйте минимум ' + n + ' раунда'],
     [/«—» — hali (\d+) raunddan kam oʻynagan\. Botlar hisoblanmaydi\./g, (m, n) => '«—» — сыграно меньше ' + n + ' раундов. Боты не учитываются.'],
@@ -414,6 +418,9 @@
     'Tort': 'Торт',
     'Pivo': 'Пиво',
     'Olib qoʻyish': 'Убрать',
+    'Koʻrinish': 'Вид',
+    'tekis': 'плоский',
+    'hajmli stol': 'объёмный стол',
     'Hamma oʻtirdi!': 'Все за столом!',
     'Stol egasi sizni oʻyindan chiqardi — siz mehmonsiz.': 'Хозяин стола убрал вас из игры — теперь вы гость.',
     'Oʻyindan chiqarish': 'Убрать из игры',

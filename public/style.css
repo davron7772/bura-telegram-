@@ -788,3 +788,91 @@ button.hs:focus-visible { outline: 2px solid #fff; outline-offset: 2px; border-r
 .item b { font-size: 16px; }
 .item.on { background: rgba(240, 180, 60, .16); box-shadow: inset 0 0 0 2px var(--saffron); }
 .item:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+
+/* =====================================================================
+   3D koʻrinish (html.v3d): hajmli stol, qiya movut, soyali kartalar
+   ===================================================================== */
+.t3d { display: none; }
+.vico { display: block; width: 46px; height: 24px; margin-bottom: 4px; }
+.vico-2d { border-radius: 6px; background: var(--madder); box-shadow: 0 0 0 2px #7a3b1e; }
+.vico-3d { border-radius: 50%; background: radial-gradient(#8a2a31, var(--madder)); box-shadow: 0 0 0 2px #7a3b1e, 0 5px 0 #2e1307; transform: perspective(60px) rotateX(35deg); }
+
+.v3d .field {
+  background:
+    radial-gradient(120% 60% at 50% 40%, rgba(240, 180, 60, .10), transparent 60%),
+    radial-gradient(90% 80% at 50% 45%, #2a2350 0%, #151634 58%, #07081a 100%);
+}
+.v3d .field > .gul { display: none; }
+.v3d .t3d { display: block; position: absolute; left: 0; right: 0; top: 30px; bottom: -40px; perspective: 900px; perspective-origin: 50% 0%; pointer-events: none; }
+.v3d .t3-in { position: absolute; left: 1.5%; right: 1.5%; top: 0; bottom: 0; transform-style: preserve-3d; transform: rotateX(26deg); transform-origin: 50% 0%; }
+.v3d .t3-in i { position: absolute; inset: 0; border-radius: 50% / 46%; display: block; }
+.v3d .t3-thick { transform: translateY(14px); background: #1c0a04; box-shadow: 0 24px 50px 14px rgba(0, 0, 0, .7); }
+.v3d .t3-rim {
+  background:
+    radial-gradient(closest-side, transparent 85%, rgba(255, 230, 190, .30) 89.5%, transparent 96%),
+    radial-gradient(closest-side, transparent 81%, rgba(0, 0, 0, .45) 84.5%, transparent 88%),
+    radial-gradient(60% 40% at 50% 8%, rgba(255, 220, 170, .32), transparent 60%),
+    linear-gradient(165deg, #6b3018, #3f1a0b 45%, #1e0b04 100%);
+  box-shadow: 0 0 0 2px #1a0904, inset 0 -6px 14px rgba(0, 0, 0, .6);
+}
+.v3d .t3-felt {
+  inset: 26px 24px !important; border-radius: 50% / 46% !important; overflow: hidden;
+  background: radial-gradient(70% 55% at 50% 40%, #8a2a31 0%, var(--madder) 55%, #2e0b10 100%);
+  box-shadow: 0 0 0 1.5px rgba(240, 180, 60, .85), 0 0 10px rgba(240, 180, 60, .3), inset 0 10px 30px rgba(0, 0, 0, .55), inset 0 -4px 16px rgba(0, 0, 0, .4);
+}
+.v3d .t3-felt::before { content: ''; position: absolute; inset: 0; opacity: .07; background-image: var(--paxta); background-size: 26px 26px; filter: invert(1); }
+.v3d .t3-felt::after { /* suzani medalyon */
+  content: ''; position: absolute; left: 50%; top: 46%; width: 170px; height: 170px; margin: -85px 0 0 -85px; border-radius: 50%; opacity: .5;
+  background: radial-gradient(circle, transparent 46%, rgba(240, 180, 60, .55) 47%, rgba(240, 180, 60, .55) 48.5%, transparent 49.5%), repeating-conic-gradient(rgba(240, 180, 60, .2) 0 7deg, transparent 7deg 22.5deg);
+  -webkit-mask: radial-gradient(circle, #000 0 50%, transparent 51%); mask: radial-gradient(circle, #000 0 50%, transparent 51%);
+}
+.v3d .t3-felt b { position: absolute; left: 50%; top: 46%; transform: translate(-50%, -50%); font: 800 30px var(--serif); letter-spacing: .14em; color: rgba(240, 180, 60, .28); }
+.v3d .field > :not(.t3d) { position: relative; z-index: 1; }
+
+/* oʻyinchilar: tilla halqa, yaltiroq avatar, nom plashkasi */
+.v3d .opp .ava { box-shadow: 0 0 0 2.5px #e9b84f, 0 0 0 4px #6d4a12, 0 8px 14px rgba(0, 0, 0, .6); }
+.v3d .opp .ava::after { content: ''; position: absolute; inset: 0; border-radius: 50%; background: linear-gradient(160deg, rgba(255, 255, 255, .32), transparent 45%); pointer-events: none; z-index: 1; }
+.v3d .opp.partner .ava { box-shadow: 0 0 0 2.5px #e9b84f, 0 0 0 4px #2f6b3f, 0 8px 14px rgba(0, 0, 0, .6); }
+.v3d .opp.turn .ava { box-shadow: 0 0 0 2.5px #e9b84f, 0 0 0 4px #6d4a12, 0 0 16px 3px rgba(255, 70, 60, .4), 0 8px 14px rgba(0, 0, 0, .6); }
+.v3d .opp .nm { padding: 2px 10px 3px; border-radius: 9px; background: linear-gradient(#262a52, #14162e); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .14), 0 4px 10px rgba(0, 0, 0, .5); }
+.v3d .opp .meta { text-shadow: 0 1px 3px #000; }
+.v3d .mini { box-shadow: inset 0 0 0 1.5px var(--porcelain-cool), 1px 2px 3px rgba(0, 0, 0, .6); }
+.v3d .opp .fan { transform: perspective(120px) rotateX(18deg); }
+
+/* stoldagi kartalar: movutga yotgandek qiya, qalinlik va soya */
+.v3d .trick { transform: perspective(760px) rotateX(18deg); transform-origin: 50% 60%; }
+.v3d .trick .card, .v3d .deck .card {
+  box-shadow: 0 0 0 1px rgba(60, 25, 25, .25), 0 1px 0 #d8d0c2, 0 2px 0 #c2b8a6, 4px 9px 12px rgba(0, 0, 0, .55);
+}
+.v3d.skin-kashta .trick .card.face {
+  box-shadow: inset 0 0 0 calc(var(--w) * .04) #fbfaf6, inset 0 0 0 calc(var(--w) * .04 + 1.2px) #2e4a36, 0 1px 0 #d8d0c2, 0 2px 0 #c2b8a6, 4px 9px 12px rgba(0, 0, 0, .55);
+}
+.v3d .trick .card.back, .v3d .deck .card.back {
+  box-shadow: inset 0 0 0 calc(var(--w) * .055) var(--porcelain-cool), inset 0 0 0 calc(var(--w) * .075) var(--cobalt), 0 1px 0 #cfd4e6, 0 2px 0 #aeb5cf, 0 3px 0 #9aa2c0, 4px 9px 12px rgba(0, 0, 0, .55);
+}
+.v3d .slot.best .card { box-shadow: 0 0 0 2px var(--saffron), 0 0 12px rgba(240, 180, 60, .45), 4px 9px 12px rgba(0, 0, 0, .55); }
+.v3d .event { text-shadow: 0 1px 4px #000; }
+
+/* pastki qism: stol chetiga tutashadi, qoʻldagi kartalar yelpigʻich boʻlib turadi */
+.v3d .dock { background: linear-gradient(rgba(14, 16, 38, .0), #0e1026 38%), var(--hoshiya) left top / 16px 8px repeat-x; z-index: 2; }
+.v3d .hand { perspective: 700px; gap: 0; padding-top: 26px; }
+.v3d .hand .card {
+  --c: calc((var(--n, 4) - 1) / 2);
+  margin: 0 calc(var(--cw) * -.06);
+  transform-origin: 50% 120%;
+  transform: translateY(calc(var(--lift, 0px) + (var(--i) - var(--c)) * (var(--i) - var(--c)) * 3px)) rotate(calc((var(--i) - var(--c)) * 6deg)) rotateX(10deg);
+  box-shadow: 0 0 0 1px rgba(60, 25, 25, .25), -1px 0 0 #e2d9c9, -2px 1px 0 #c9bfac, 0 14px 22px rgba(0, 0, 0, .55);
+}
+.v3d.skin-kashta .hand .card.face { box-shadow: inset 0 0 0 calc(var(--w) * .04) #fbfaf6, inset 0 0 0 calc(var(--w) * .04 + 1.2px) #2e4a36, -1px 0 0 #e2d9c9, -2px 1px 0 #c9bfac, 0 14px 22px rgba(0, 0, 0, .55); }
+.v3d .hand.n1 .card { --n: 1; } .v3d .hand.n2 .card { --n: 2; } .v3d .hand.n3 .card { --n: 3; } .v3d .hand.n4 .card { --n: 4; }
+.v3d .hand .card.sel { --lift: -20px; box-shadow: 0 0 0 3px var(--saffron), 0 0 16px rgba(240, 180, 60, .55), 0 20px 28px rgba(0, 0, 0, .6); }
+.v3d .hand.spect .card { --n: 4; }
+
+/* tugmalar: hajmli */
+.v3d .actions .btn.primary { background: linear-gradient(#ffd47a, #f0b43c 45%, #c98d1c); box-shadow: inset 0 2px 0 rgba(255, 255, 255, .55), inset 0 -3px 0 rgba(0, 0, 0, .18), 0 5px 0 #7a5208, 0 9px 16px rgba(0, 0, 0, .5); }
+.v3d .actions .btn.primary:active { transform: translateY(3px); box-shadow: inset 0 2px 0 rgba(255, 255, 255, .55), 0 2px 0 #7a5208, 0 4px 8px rgba(0, 0, 0, .5); }
+.v3d .actions .btn.secondary { background: linear-gradient(#3a3f74, #262a52); box-shadow: inset 0 2px 0 rgba(255, 255, 255, .16), inset 0 -3px 0 rgba(0, 0, 0, .25), 0 5px 0 #11132a, 0 9px 16px rgba(0, 0, 0, .5); }
+@media (prefers-reduced-motion: reduce) { .v3d .hand .card { transition: none; } }
+.v3d .hand.spect .card:nth-child(1) { --i: 0; } .v3d .hand.spect .card:nth-child(2) { --i: 1; } .v3d .hand.spect .card:nth-child(3) { --i: 2; } .v3d .hand.spect .card:nth-child(4) { --i: 3; }
+.modes.view { margin: 0 0 12px; }
+.modes.view + .toggle { margin-bottom: 18px; }
