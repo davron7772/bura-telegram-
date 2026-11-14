@@ -410,7 +410,11 @@
           haptic('light');
         }
       } else if (V.status === 'live') {
-        if (!me) { stop('removed'); return; }
+        if (!me) {
+          // Mikrofon yoqilayotganda (chiqib-qayta kirish) eski roʻyxat kelib qolishi mumkin — uzilmaymiz, kutamiz
+          if (Date.now() - rejoinAt < 10000) { V.status = 'joining'; V.me = null; closeAll(); stopLoop(); onChange(); return; }
+          stop('removed'); return;
+        }
         if (me !== V.me) { closeAll(); V.me = me; fwdKey = ''; statKey = ''; }
       }
       if (V.status === 'live') { sync(); syncFwd(); queueStat(); }
@@ -857,12 +861,14 @@
     }
 
     // "Faqat eshitish" holatidan mikrofonni yoqish: ulanishlar qaytadan quriladi
+    let rejoinAt = 0; // mikrofon yoqish uchun qayta qoʻshilgan vaqt
     function retryMic() {
       getMic().then(function (s) {
         if (V.status !== 'live') { if (s) s.getTracks().forEach(stopTrack); return; }
         if (!s) { toast(micErr); return; }
         setStream(s);
         closeAll();
+        rejoinAt = Date.now();
         send({ t: 'voice_leave' });
         V.status = 'joining';
         V.me = null;
