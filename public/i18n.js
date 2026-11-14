@@ -48,6 +48,7 @@
     [/(\d+) soniyadan keyin/g, (m, n) => 'через ' + n + ' ' + pl(n, 'секунду', 'секунды', 'секунд')],
     [/Qolgan (\d+) oʻringa bot qoʻshish/g, (m, n) => 'Ботов на оставшиеся места: ' + n],
     [/Qolgan (\d+) oʻringa bot/g, (m, n) => 'Боты на ' + n + ' ' + pl(n, 'место', 'места', 'мест')],
+    [/\b(\d)-j\./g, (m, n) => n + '-к.'], // hisobda jamoa qisqartmasi: 1-j. → 1-к.
     [/(\d+)-jamoaga/g, (m, n) => 'команде ' + n],
     [/(\d+)-jamoa/g, (m, n) => 'Команда ' + n],
     [/(\d+)-oʻyinchiga/g, (m, n) => 'игроку ' + n],
