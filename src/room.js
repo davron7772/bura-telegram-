@@ -38,6 +38,7 @@
     this.onRoundEnd = o.onRoundEnd || function () {};
     this.onEmpty = o.onEmpty || function () {};  // stolda faol oʻyinchi qolmadi — stol yopiladi
     this.emptyMs = o.emptyMs != null ? o.emptyMs : 2500;        // hamma turib ketsa
+    this.offlineMs = o.offlineMs != null ? o.offlineMs : 30000; // oflayn oʻyinchining oʻrni shuncha vaqtdan keyin boʻshaydi
     this.awayMs = o.awayMs != null ? o.awayMs : 90000;          // hamma oflayn boʻlsa (ilova yopilgan)
     this.resumeMs = o.resumeMs != null ? o.resumeMs : 30000;    // davom/yangidan tanlovi — shundan keyin davom etadi
 
@@ -195,16 +196,17 @@ P.fixHost = function () {
     this.checkAutoStart();
   };
 
-  // Lobbida uzoq vaqt oflayn boʻlganlarni chiqarish
+  // 30 soniyadan ortiq oflayn boʻlgan oʻyinchining oʻrni boʻshatiladi — har qanday holatda
+  // (lobbi, oʻyin, raund oxiri). Oʻyin paytida boʻshasa, oʻyin toʻxtaydi: boʻsh joyga
+  // kimdir oʻtirishi yoki bot qoʻshilishi kerak. Qaytib kelsa — mehmon boʻladi.
   P.sweep = function () {
-    if (this.phase !== 'lobby') return false;
     const now = this.now();
     let ch = false;
     for (let i = 0; i < this.size; i++) {
       const s = this.seats[i];
-      if (s && !s.bot && !this.isOnline(s.id) && s.offlineSince && now - s.offlineSince >= 30000) { this.seats[i] = null; ch = true; }
+      if (s && !s.bot && !this.isOnline(s.id) && s.offlineSince && now - s.offlineSince >= this.offlineMs) { this.seats[i] = null; ch = true; }
     }
-    if (ch) { this.fixHost(); this.clearLobbyTimer(); this.changed(); }
+    if (ch) { this.fixHost(); this.clearLobbyTimer(); this.cancelResume(); this.reschedule(); this.changed(); }
     return ch;
   };
 
