@@ -58,8 +58,17 @@ let bot = null;
 
 const { Stats } = require('./src/stats');
 // Statistika fayli: DATA_DIR (masalan Render Disk: /var/data) yoki ./data
-const stats = new Stats({ file: path.join(process.env.DATA_DIR || path.join(__dirname, 'data'), 'stats.json') });
-process.on('SIGTERM', function () { stats.flush(); });
+// YANDEX_DISK_TOKEN boʻlsa — statistika Yandex Diskda ham saqlanadi (server qayta ishga tushsa ham yoʻqolmaydi)
+const { YaDisk } = require('./src/yadisk');
+const yaToken = (process.env.YANDEX_DISK_TOKEN || '').trim();
+const stats = new Stats({
+  file: path.join(process.env.DATA_DIR || path.join(__dirname, 'data'), 'stats.json'),
+  remote: yaToken ? new YaDisk({ token: yaToken }) : null
+});
+if (yaToken) {
+  stats.loadRemote().then(function () { console.log('[stats] Yandex Diskdan yuklandi:', stats.users.size, 'oʻyinchi'); })
+    .catch(function (e) { console.error('[stats] Yandex Diskdan yuklab boʻlmadi:', e.message); });
+} else console.log('[stats] YANDEX_DISK_TOKEN yoʻq — statistika faqat server xotirasida');
 const hub = new Hub({
   stats: stats,
   botToken: cfg.botToken,
@@ -134,8 +143,11 @@ function shutdown() {
   console.log('Toʻxtatilmoqda…');
   if (turn) turn.stop();
   hub.close();
-  server.close(function () { process.exit(0); });
-  setTimeout(function () { process.exit(0); }, 3000).unref();
+  stats.flush();
+  // Statistikani Yandex Diskka yozib ulguramiz (Render ~30 soniya beradi)
+  const done = stats.flushRemote().catch(function (e) { console.error('[stats]', e.message); });
+  server.close(function () { done.then(function () { process.exit(0); }); });
+  setTimeout(function () { process.exit(0); }, 12000).unref();
 }
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);

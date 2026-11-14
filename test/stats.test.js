@@ -74,3 +74,33 @@ test('statistika: oʻyinda yigʻiladi, botlar hisoblanmaydi, faylga saqlanadi', 
   assert.equal(again.me('a').rounds, 3);
   assert.equal(again.list()[0].ranked, true);
 });
+
+test('Yandex Disk: avval oʻqiydi, keyin yozadi; 404 — yangi fayl', async () => {
+  const { YaDisk } = require('../src/yadisk');
+  let stored = null; const calls = [];
+  const fakeFetch = async (url, init) => {
+    init = init || {};
+    calls.push((init.method || 'GET') + ' ' + url.split('?')[0]);
+    const json = (o, st) => ({ ok: (st || 200) < 400, status: st || 200, json: async () => o, text: async () => JSON.stringify(o) });
+    if (url.includes('/resources/download')) return stored == null ? json({}, 404) : json({ href: 'https://dl/x' });
+    if (url.includes('/resources/upload')) { assert.equal(init.headers.Authorization, 'OAuth T'); return json({ href: 'https://up/x' }); }
+    if (url === 'https://dl/x') return { ok: true, status: 200, text: async () => stored };
+    if (url === 'https://up/x') { stored = init.body; return { ok: true, status: 201 }; }
+    throw new Error('kutilmagan ' + url);
+  };
+  const s1 = new Stats({ remote: new YaDisk({ token: 'T', fetch: fakeFetch }), remoteMs: 10 });
+  await s1.loadRemote();
+  s1.round({ id: 'a', name: 'Ali' }, { won: true, points: 70, n: 4 });
+  await s1.flushRemote();
+  assert.ok(stored && JSON.parse(stored).users[0].id === 'a');
+  const s2 = new Stats({ remote: new YaDisk({ token: 'T', fetch: fakeFetch }) });
+  await s2.loadRemote();
+  assert.equal(s2.me('a').rounds, 1);
+  // oʻqilmaguncha yozmaydi: pushRemote avval loadRemote qiladi
+  const s3 = new Stats({ remote: new YaDisk({ token: 'T', fetch: fakeFetch }) });
+  s3.round({ id: 'b', name: 'Vali' }, { won: false, points: 20, n: 4 });
+  await s3.flushRemote();
+  const users = JSON.parse(stored).users.map((u) => u.id).sort();
+  assert.deepEqual(users, ['a', 'b']);
+  clearTimeout(s1.rtimer); clearTimeout(s3.rtimer);
+});

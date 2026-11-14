@@ -45,6 +45,11 @@ function Stats(opts) {
   this.now = opts.now || Date.now;
   this.users = new Map();
   this.timer = null;
+  this.remote = opts.remote || null;   // Yandex Disk (read/write)
+  this.remoteMs = opts.remoteMs || 30000;
+  this.remoteOk = !this.remote;        // masofadagi fayl oʻqilmaguncha unga yozmaymiz (ustidan yozib yubormaslik uchun)
+  this.rtimer = null;
+  this.dirty = false;
   this.load();
 }
 const P = Stats.prototype;
@@ -58,7 +63,52 @@ P.load = function () {
   }
 };
 
+P.serialize = function () {
+  return JSON.stringify({ v: 1, users: Array.from(this.users.values()) });
+};
+
+// Masofadagi fayldan yuklash: koʻproq oʻynalgan yozuv ustun
+P.loadRemote = async function () {
+  if (!this.remote) return;
+  const text = await this.remote.read();
+  if (text) {
+    const data = JSON.parse(text);
+    for (const u of (data && data.users) || []) {
+      if (!u || !u.id) continue;
+      const id = String(u.id), cur = this.users.get(id);
+      if (!cur || (u.rounds + u.moves) >= (cur.rounds + cur.moves)) this.users.set(id, u);
+    }
+  }
+  this.remoteOk = true;
+};
+
+P.pushRemote = async function () {
+  if (!this.remote) return;
+  if (!this.remoteOk) await this.loadRemote();
+  this.dirty = false;
+  await this.remote.write(this.serialize());
+};
+
+P.scheduleRemote = function () {
+  if (!this.remote || this.rtimer) return;
+  const self = this;
+  this.rtimer = setTimeout(function () {
+    self.rtimer = null;
+    self.pushRemote().catch(function (e) { self.dirty = true; console.error('[stats]', e.message); self.scheduleRemote(); });
+  }, this.remoteMs);
+  if (this.rtimer.unref) this.rtimer.unref();
+};
+
+// Toʻxtashdan oldin: kutilayotgan oʻzgarishlarni darhol yozish
+P.flushRemote = async function () {
+  if (!this.remote || !this.dirty) return;
+  if (this.rtimer) { clearTimeout(this.rtimer); this.rtimer = null; }
+  await this.pushRemote();
+};
+
 P.save = function () {
+  this.dirty = true;
+  this.scheduleRemote();
   if (!this.file || this.timer) return;
   const self = this;
   this.timer = setTimeout(function () {
@@ -73,7 +123,7 @@ P.flush = function () {
   try {
     fs.mkdirSync(path.dirname(this.file), { recursive: true });
     const tmp = this.file + '.tmp';
-    fs.writeFileSync(tmp, JSON.stringify({ v: 1, users: Array.from(this.users.values()) }));
+    fs.writeFileSync(tmp, this.serialize());
     fs.renameSync(tmp, this.file);
   } catch (e) { console.error('[stats] saqlab boʻlmadi:', e.message); }
 };
