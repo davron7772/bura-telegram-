@@ -1,0 +1,36 @@
+{
+  "expo": {
+    "name": "Bura",
+    "slug": "bura",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.sabirovvisuals.bura"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0E3A2D",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "package": "com.sabirovvisuals.bura"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font"
+    ],
+    "scheme": "bura",
+    "backgroundColor": "#081613",
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
