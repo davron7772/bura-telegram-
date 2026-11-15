@@ -136,40 +136,79 @@
 
   function connectWS() {
     const url = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws';
-    let ws = null, retry = 0, pingT = null, reconnectT = null;
+    let ws = null, retry = 0, pingT = null, reconnectT = null, lastRx = 0, probeT = null;
+    // Telefonda aloqa "ochiq" koʻrinib, aslida uzilib qolishi mumkin (ekran oʻchganda, internet almashganda).
+    // Shuning uchun server javobini kuzatamiz: jim qolsa — darhol qayta ulanamiz.
+    function lost() {
+      if (!ws) return;
+      const old = ws;
+      ws = null;
+      old.onopen = old.onmessage = old.onclose = old.onerror = null;
+      try { old.close(); } catch (e) { /* */ }
+      clearInterval(pingT); clearTimeout(probeT);
+      if (VC) VC.onClose();
+      setConn('closed');
+      clearTimeout(reconnectT);
+      reconnectT = setTimeout(open, retry ? Math.min(8000, 500 * Math.pow(1.7, retry++)) : (retry++, 0));
+    }
+    function probe(ms) {
+      if (!ws || ws.readyState !== 1) return;
+      const sent = Date.now();
+      try { ws.send('{"t":"ping"}'); } catch (e) { return lost(); }
+      clearTimeout(probeT);
+      probeT = setTimeout(function () { if (lastRx < sent) lost(); }, ms);
+    }
     function open() {
       clearTimeout(reconnectT);
       if (ws && ws.readyState <= 1) return;
       ws = new WebSocket(url);
       ws.binaryType = 'arraybuffer'; // server orqali ovoz kadrlari
+      lastRx = Date.now();
+      const me = ws;
+      const openT = setTimeout(function () { if (ws === me && me.readyState !== 1) lost(); }, 10000);
       ws.onopen = function () {
+        clearTimeout(openT);
         retry = 0;
+        lastRx = Date.now();
         setConn('open');
         ws.send(JSON.stringify(helloMsg()));
         if (VC) VC.onOpen(); // ovozli chatga qayta qoʻshilish (hello dan keyin)
         clearInterval(pingT);
-        pingT = setInterval(function () { if (ws.readyState === 1) ws.send('{"t":"ping"}'); }, 20000);
+        // har 8 soniyada tekshiramiz; 6 soniyada javob boʻlmasa — aloqa oʻlik
+        pingT = setInterval(function () { if (Date.now() - lastRx > 7000) probe(6000); }, 8000);
       };
       ws.onmessage = function (e) {
+        lastRx = Date.now();
         if (typeof e.data !== 'string') { if (VC) VC.onBinary(e.data); return; }
         let m;
         try { m = JSON.parse(e.data); } catch (x) { return; }
+        if (m.t === 'pong') return;
         onMessage(m);
       };
       ws.onclose = function () {
-        clearInterval(pingT);
+        clearTimeout(openT);
+        if (ws !== me) return;
+        clearInterval(pingT); clearTimeout(probeT);
+        ws = null;
         if (VC) VC.onClose();
         setConn('closed');
         reconnectT = setTimeout(open, Math.min(8000, 500 * Math.pow(1.7, retry++)));
       };
     }
-    document.addEventListener('visibilitychange', function () {
-      if (!document.hidden && (!ws || ws.readyState > 1)) { retry = 0; open(); }
-    });
+    // Ilovaga qaytganda (ekran yoqilganda, Telegramga qaytganda) aloqani darhol tekshiramiz
+    function wake() {
+      if (document.hidden) return;
+      if (!ws || ws.readyState > 1) { retry = 0; open(); return; }
+      probe(2500);
+    }
+    document.addEventListener('visibilitychange', wake);
+    window.addEventListener('focus', wake);
+    window.addEventListener('online', function () { retry = 0; if (!ws || ws.readyState !== 1) open(); else probe(2500); });
+    window.addEventListener('pageshow', wake);
     open();
     T = {
       send: function (o) {
-        if (ws && ws.readyState === 1) ws.send(JSON.stringify(o));
+        if (ws && ws.readyState === 1) { ws.send(JSON.stringify(o)); if (Date.now() - lastRx > 4000) probe(3000); }
         else { toast('Aloqa yoʻq. Qayta ulanmoqda…'); S.busy = false; }
       },
       raw: function (o) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); },
