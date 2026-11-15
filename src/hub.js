@@ -7,6 +7,9 @@ const { validateInitData } = require('./auth');
 const { displayName, safePhoto } = require('./util');
 const { hasTurn } = require('./ice');
 
+const ANNOUNCE_GAP_MS = 10 * 60 * 1000; // bir odam haqida 10 daqiqada bir marta xabar
+const INVITE_GAP_MS = 20 * 1000;          // bir odamni qayta chaqirish oraligʻi
+const INVITE_TTL_MS = 60 * 1000;          // taklif 1 daqiqa amal qiladi
 const MAX_ROOMS = 5000;
 const IDLE_MS = 2 * 60 * 60 * 1000; // 2 soat hech kim boʻlmasa stol oʻchadi
 const VOICE_MAX = 6;                // bitta stolda ovozli chatda bir vaqtda (har kim har kim bilan ulanadi)
@@ -58,7 +61,9 @@ class Hub {
     this.cfg = cfg;
     this.rooms = new Map();
     this.stats = cfg.stats || null; // oʻyinchilar samaradorligi va tashriflar
-    this.clients = new Set();       // ulangan mijozlar (ilovada oʻtirgan vaqtni hisoblash uchun)
+    this.clients = new Set();
+    this.invites = new Map(); // id -> { from, to, room, seat, at }
+    this.invSent = new Map(); // kim>kimga -> vaqt (spam boʻlmasin)       // ulangan mijozlar (ilovada oʻtirgan vaqtni hisoblash uchun)
     this.conns = new Map(); // roomId -> Set(conn)
     this.onRoomChange = cfg.onRoomChange || function () {};
     this.onRoomRemoved = cfg.onRoomRemoved || function () {};
@@ -252,6 +257,9 @@ class Hub {
       return this.send(c, { t: 'stats', list: this.stats.list(100), me: this.stats.me(c.user.id), min: require('./stats').MIN_ROUNDS, total: this.stats.total() });
     }
     if (m.t === 'join') return this.join(c, m);
+    if (m.t === 'invitable') return this.send(c, { t: 'invitable', list: this.invitable(c), seat: m.seat });
+    if (m.t === 'invite') return this.invite(c, m);
+    if (m.t === 'invite_reply') return this.inviteReply(c, m);
     if (!c.room) {
       if (m.t === 'voice_join') return this.send(c, { t: 'voice_end', reason: 'noroom' });
       if (VOICE_MSG[m.t]) return; // eski signal — jimgina tashlaymiz
@@ -284,7 +292,14 @@ class Hub {
     if (this.stats && (!c.user || c.user.id !== user.id)) { this.tickTime(c); this.stats.visit(user); c.tick = Date.now(); }
     c.user = user;
     this.send(c, { t: 'welcome', me: { name: user.name } });
-    const ref = String(m.room || startParam || '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 40);
+    this.route(c, String(m.room || startParam || ''));
+    this.announce(c);
+  }
+
+  // Ilova ochilganda: zalga yoki aniq stolga
+  route(c, raw) {
+    const user = c.user;
+    const ref = raw.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 40);
     if (!ref || ref[0] === 'g') { // zal: guruhniki yoki umumiy
       const g = ref ? this.groupByKey(ref) : this.publicHall();
       if (!g) { this.send(c, { t: 'error', msg: 'Bu zal topilmadi' }); return this.enterHall(c, this.publicHall()); }
@@ -299,6 +314,90 @@ class Hub {
     if (room) return this.enter(c, room, seat);
     this.send(c, { t: 'error', msg: 'Stol topilmadi — u yopilgan boʻlishi mumkin' });
     this.enterHall(c, this.publicHall());
+  }
+
+  // ---------- Guruhdoshlar: kirganini bildirish va stolga chaqirish ----------
+
+  // Guruhdosh oʻyinni ochdi — shu zalda stolda oʻtirganlarga xabar (qayta ulanishlarda emas)
+  announce(c) {
+    const g = c.hall;
+    if (!g || !c.user) return;
+    const now = Date.now();
+    if (!g.seen) g.seen = new Map();
+    const last = g.seen.get(c.user.id) || 0;
+    g.seen.set(c.user.id, now);
+    if (now - last < ANNOUNCE_GAP_MS) return;
+    if (g.seen.size > 5000) g.seen.clear();
+    const sent = new Set();
+    for (const o of g.subs) {
+      if (!o.user || o.user.id === c.user.id || !o.room || o.room.seatOf(o.user.id) < 0) continue;
+      if (sent.has(o.user.id)) continue;
+      this.send(o, { t: 'notice', kind: 'came', name: c.user.name, free: o.room.seats.some((s) => !s) ? 1 : 0 });
+      sent.add(o.user.id);
+    }
+  }
+
+  // Shu zaldagi boshqa odamlar (boshqa stolda oʻtirganlar avval) — chaqirish roʻyxati
+  invitable(c) {
+    const g = c.hall || (c.room && c.room.groupKey ? this.groups.get(c.room.groupKey) : null);
+    const out = [], seen = new Set();
+    if (g) {
+      for (const o of g.subs) {
+        if (!o.user || o.user.id === c.user.id || seen.has(o.user.id)) continue;
+        if (c.room && c.room.seatOf(o.user.id) >= 0) continue; // shu stolda allaqachon
+        seen.add(o.user.id);
+        const r = o.room && !o.room.destroyed ? o.room : null;
+        const seat = r ? r.seatOf(o.user.id) : -1;
+        out.push({ uid: o.user.id, name: o.user.name, photo: o.user.photo || null, table: r ? r.no : 0, seated: seat >= 0, playing: !!(r && seat >= 0 && r.phase === 'playing') });
+      }
+    }
+    out.sort((a, b) => (b.seated - a.seated) || (a.table - b.table) || a.name.localeCompare(b.name));
+    c.invList = out.slice(0, 60).map((x) => x.uid); // mijozga id emas, tartib raqami beriladi
+    return out.slice(0, 60).map((x, k) => ({ k: k, name: x.name, photo: x.photo, table: x.table, seated: x.seated, playing: x.playing }));
+  }
+
+  invite(c, m) {
+    const room = c.room;
+    if (!room || room.destroyed) return this.send(c, { t: 'error', msg: 'Avval stolga oʻting' });
+    if (room.seatOf(c.user.id) < 0) return this.send(c, { t: 'error', msg: 'Chaqirish uchun stolda oʻtirgan boʻlishingiz kerak' });
+    const seat = Number(m.seat);
+    if (!Number.isInteger(seat) || seat < 0 || seat >= room.size || room.seats[seat]) return this.send(c, { t: 'error', msg: 'Bu oʻrin band' });
+    const uid = c.invList && c.invList[Number(m.k)];
+    if (!uid) return this.send(c, { t: 'error', msg: 'Roʻyxat eskirdi — qaytadan oching' });
+    const now = Date.now();
+    const key = c.user.id + '>' + uid;
+    if (now - (this.invSent.get(key) || 0) < INVITE_GAP_MS) return this.send(c, { t: 'error', msg: 'Taklif yuborilgan — javobini kuting' });
+    let targets = 0;
+    const id = crypto.randomBytes(6).toString('hex');
+    const g = room.groupKey ? this.groups.get(room.groupKey) : null;
+    for (const o of g ? g.subs : []) {
+      if (!o.user || o.user.id !== uid) continue;
+      this.send(o, { t: 'invited', id: id, from: c.user.name, photo: c.user.photo || null, no: room.no, seat: seat, size: room.size, role: room.size === 2 ? 'raqib' : seat % 2 === room.seatOf(c.user.id) % 2 ? 'sherik' : 'raqib' });
+      targets++;
+    }
+    if (!targets) return this.send(c, { t: 'error', msg: 'U hozir oʻyindan chiqib ketgan' });
+    this.invSent.set(key, now);
+    if (this.invSent.size > 2000) this.invSent.clear();
+    this.invites.set(id, { from: c.user.id, fromName: c.user.name, to: uid, room: room.id, seat: seat, at: now });
+    if (this.invites.size > 2000) for (const [k, v] of this.invites) if (now - v.at > INVITE_TTL_MS) this.invites.delete(k);
+    this.send(c, { t: 'notice', kind: 'sent', name: '' });
+  }
+
+  inviteReply(c, m) {
+    const inv = this.invites.get(String(m.id || ''));
+    if (!inv || inv.to !== c.user.id || Date.now() - inv.at > INVITE_TTL_MS) return this.send(c, { t: 'error', msg: 'Taklif eskirgan' });
+    this.invites.delete(String(m.id));
+    const room = this.rooms.get(inv.room);
+    const tell = (msg) => { for (const o of this.clients) if (o.user && o.user.id === inv.from) this.send(o, { t: 'notice', kind: msg, name: c.user.name }); };
+    if (!m.go) return tell('stay');
+    if (!room || room.destroyed) return this.send(c, { t: 'error', msg: 'Bu stol yopilgan' });
+    // Eski stoldagi oʻrnidan turadi (u yerda oʻyin boʻlsa — toʻxtaydi, kimdir oʻtirguncha)
+    const old = c.room;
+    if (old && old !== room && old.seatOf(c.user.id) >= 0) old.dispatch(c.user.id, { t: 'leave' });
+    const free = !room.seats[inv.seat];
+    this.join(c, { room: room.id, seat: free ? inv.seat : undefined });
+    if (!free) this.send(c, { t: 'error', msg: 'Oʻrin band boʻlib qoldi — boshqa boʻsh joyni tanlang' });
+    tell(free ? 'came_in' : 'late');
   }
 
   // Foydalanuvchi oʻtirgan stol (zalga qayta kirganda toʻgʻri shu stolga)

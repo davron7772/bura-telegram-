@@ -282,6 +282,22 @@
     else if (m.t === 'closed') { S.sheet = null; toast(m.why === 'away' ? 'Stol yopildi: oʻyinchilar uzoq vaqt qaytmadi' : 'Stol yopildi: stolda oʻyinchi qolmadi'); }
     else if (m.t === 'home') { if (VC) VC.reset(); S.screen = 'home'; S.room = null; S.missing = !!m.missing; render(); }
     else if (m.t === 'auth_error') { S.screen = 'auth'; render(); }
+    else if (m.t === 'invitable') { if (S.inv) { S.inv.list = m.list || []; if (S.sheet && S.sheet.type === 'invite') render(); } }
+    else if (m.t === 'invited') {
+      S.invited = m;
+      haptic('success');
+      openSheet('invited');
+      clearTimeout(S.invitedT);
+      S.invitedT = setTimeout(function () { if (S.invited === m) { S.invited = null; if (S.sheet && S.sheet.type === 'invited') { S.sheet = null; render(); } } }, 58000);
+    }
+    else if (m.t === 'notice') {
+      const txt = m.kind === 'came' ? '👋 ' + m.name + ' oʻyinga kirdi' + (m.free ? ' — boʻsh oʻringa bosib chaqirishingiz mumkin' : '')
+        : m.kind === 'sent' ? 'Taklif yuborildi — javobini kuting'
+        : m.kind === 'stay' ? m.name + ' oʻz stolida qoldi'
+        : m.kind === 'came_in' ? '🎉 ' + m.name + ' stolingizga oʻtdi'
+        : m.kind === 'late' ? m.name + ' keldi, lekin oʻrin band boʻlib qolgan' : '';
+      if (txt) { toast(txt, m.kind === 'came' ? 5000 : 3200); if (m.kind === 'came' || m.kind === 'came_in') haptic('light'); }
+    }
     else if (m.t === 'error') { S.busy = false; toast(m.msg); haptic('error'); renderActions(); }
   }
 
@@ -1173,6 +1189,8 @@
       case 'create': body = createHTML(); break;
       case 'stats': body = statsHTML(); break;
       case 'items': body = itemsHTML(); break;
+      case 'invite': body = inviteHTML(); break;
+      case 'invited': body = invitedHTML(); break;
     }
     if (!body) return '';
     return '<div class="sheet-wrap' + (S.sheetAnim && !reduceMotion ? ' anim' : '') + '" data-act="backdrop"><div class="sheet" role="dialog" aria-modal="true">' +
@@ -1180,6 +1198,35 @@
   }
 
   // Stoldagi oʻrinni bosganda: boʻsh — oʻtirish / bot / taklif; bot — chiqarish
+  // Zaldagi boshqa oʻyinchilarni boʻsh oʻringa chaqirish
+  function inviteHTML() {
+    const I = S.inv || {};
+    const r = S.room;
+    let h = '<h2>Kimni chaqirasiz?</h2><p class="sub">' + (r ? seatRole(r, I.seat, true) : '') + ' · taklif xabari boradi, u «Oʻtish»ni bossa shu joyga oʻtiradi.</p>';
+    if (!I.list) return h + '<p class="status">Yuklanmoqda…</p>';
+    if (!I.list.length) return h + '<p class="status">Hozir zalda boshqa hech kim yoʻq.</p><div class="lobby-actions">' + btn('close', 'Yopish', 'secondary') + '</div>';
+    h += '<ul class="invlist">';
+    I.list.forEach(function (p) {
+      const where = p.table ? p.table + '-stolda ' + (p.playing ? 'oʻynayapti' : p.seated ? 'oʻtiribdi' : 'kuzatyapti') : 'Zalda';
+      h += '<li><button type="button" class="invrow" data-act="inviteuser" data-k="' + p.k + '">' +
+        '<span class="hava" style="--av:' + AVATAR_BG[p.k % AVATAR_BG.length] + '"><span>' + esc(firstLetter(p.name)) + '</span>' +
+        (p.photo ? '<img src="' + esc(p.photo) + '" alt="" referrerpolicy="no-referrer">' : '') + '</span>' +
+        '<span class="invwho"><b>' + esc(p.name) + '</b><small>' + where + '</small></span><span class="invgo">Chaqirish</span></button></li>';
+    });
+    return h + '</ul><div class="lobby-actions">' + btn('close', 'Yopish', 'secondary') + '</div>';
+  }
+
+  // Menga kelgan taklif
+  function invitedHTML() {
+    const v = S.invited;
+    if (!v) return '';
+    return '<div class="invited"><span class="hava big" style="--av:' + AVATAR_BG[0] + '"><span>' + esc(firstLetter(v.from)) + '</span>' +
+      (v.photo ? '<img src="' + esc(v.photo) + '" alt="" referrerpolicy="no-referrer">' : '') + '</span>' +
+      '<h2>' + esc(v.from) + ' sizni chaqiryapti</h2><p class="sub">' + v.no + '-stol · ' + (v.role === 'sherik' ? 'sherigi boʻlib' : 'raqib boʻlib') + ' oʻtirasiz</p>' +
+      (S.room && S.room.mySeat >= 0 && S.room.phase === 'playing' ? '<p class="note">Oʻtsangiz, hozirgi stolingizdagi oʻyin toʻxtaydi.</p>' : '') +
+      '<div class="lobby-actions">' + btn('inv-go', 'Oʻtish', 'primary') + btn('inv-stay', 'Shu stolda qolish', 'secondary') + '</div></div>';
+  }
+
   function seatSheetHTML(r, i) {
     if (!(i >= 0 && i < sizeOf(r))) return '';
     const s = r.seats[i];
@@ -1189,6 +1236,7 @@
       h = '<h2>Boʻsh oʻrin</h2><p class="sub">' + role + (r.phase === 'playing' ? '. Oʻyin toʻxtagan — oʻrin toʻlgach davom etadi.' : '') + '</p>';
       if (r.mySeat < 0 || r.phase === 'lobby') b += btn('sit-here', r.mySeat < 0 ? 'Shu oʻringa oʻtirish' : 'Shu oʻringa oʻtish', r.mySeat < 0 ? 'primary' : 'secondary', S.busy, ' data-seat="' + i + '"');
       if (canManage(r)) b += btn('bot-here', iconSvg('i-bot') + 'Bot qoʻshish', r.mySeat < 0 ? 'secondary ico' : 'primary ico', S.busy, ' data-seat="' + i + '"');
+      if (!DEMO && r.mySeat >= 0) b += btn('invite-mates', iconSvg('i-users') + 'Boshqa stoldagini chaqirish', 'primary ico', false, ' data-seat="' + i + '"');
       if (!DEMO) b += btn('invite-here', iconSvg('i-send') + 'Doʻstni taklif qilish', 'secondary ico', false, ' data-seat="' + i + '"');
     } else if (s.bot || s.auto) {
       h = '<h2>' + esc(s.name) + '</h2><p class="sub">' + role + ' · ' + (s.bot ? 'bot' : 'oʻrnida bot oʻynayapti') + '</p>';
@@ -1460,6 +1508,17 @@
         return send({ t: act === 'sit-here' ? 'sit' : act === 'bot-here' ? 'addBot' : 'kick', seat: seat }, true);
       }
       case 'invite-here': S.sheet = null; render(); return share(Number(el.getAttribute('data-seat')));
+      case 'invite-mates':
+        S.inv = { seat: Number(el.getAttribute('data-seat')), list: null };
+        send({ t: 'invitable', seat: S.inv.seat });
+        return openSheet('invite');
+      case 'inviteuser':
+        if (!S.inv) return;
+        send({ t: 'invite', seat: S.inv.seat, k: Number(el.getAttribute('data-k')) });
+        S.sheet = null; return render();
+      case 'inv-go': case 'inv-stay':
+        if (S.invited) send({ t: 'invite_reply', id: S.invited.id, go: act === 'inv-go' });
+        clearTimeout(S.invitedT); S.invited = null; S.sheet = null; return render();
       case 'continue': case 'restart': S.sheet = null; render(); return send({ t: 'resume', mode: act }, true);
       case 'share': return share(-1);
       case 'start': return send({ t: 'start' }, true);
@@ -1528,11 +1587,11 @@
     document.addEventListener('touchend', unlockVoice, true);
   }
 
-  function toast(msg) {
+  function toast(msg, ms) {
     toastEl.textContent = msg;
     toastEl.classList.add('show');
     clearTimeout(S.toastT);
-    S.toastT = setTimeout(function () { toastEl.classList.remove('show'); }, 2600);
+    S.toastT = setTimeout(function () { toastEl.classList.remove('show'); }, ms || 2600);
   }
 
   // Navbat taymeri

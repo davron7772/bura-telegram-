@@ -880,3 +880,17 @@ button.hs:focus-visible { outline: 2px solid #fff; outline-offset: 2px; border-r
 .eff-total span b { display: block; font: 800 22px var(--serif); color: var(--saffron); }
 .eff-total span small { display: block; font-size: 12px; color: var(--muted); line-height: 1.2; }
 .eff-total em { grid-column: 1 / -1; font-style: normal; font-size: 12px; color: var(--muted); }
+
+/* Boshqa stoldagini chaqirish */
+.invlist { list-style: none; margin: 6px 0 14px; padding: 0; max-height: 52vh; overflow-y: auto; }
+.invrow { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 60px; padding: 8px 6px; border: 0; border-bottom: 1px solid rgba(247, 236, 223, .08); background: none; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.invrow .hava { width: 42px; height: 42px; flex: none; }
+.invwho { flex: 1; min-width: 0; }
+.invwho b { display: block; font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.invwho small { display: block; color: var(--muted); font-size: 13px; }
+.invgo { flex: none; padding: 7px 12px; border-radius: 99px; background: var(--saffron); color: #2a1a05; font-weight: 700; font-size: 14px; }
+.invrow:active { background: rgba(247, 236, 223, .06); }
+.invrow:focus-visible { outline: 2px solid #fff; outline-offset: -2px; }
+.invited { text-align: center; }
+.invited .hava.big { width: 72px; height: 72px; margin: 4px auto 10px; font-size: 28px; }
+.invited .lobby-actions { margin-top: 14px; }
