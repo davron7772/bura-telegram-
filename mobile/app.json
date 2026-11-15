@@ -31,6 +31,12 @@
     "backgroundColor": "#081613",
     "experiments": {
       "typedRoutes": true
+    },
+    "owner": "davron7772",
+    "extra": {
+      "eas": {
+        "projectId": "42c03219-14fe-43af-9100-dacfd9212704"
+      }
     }
   }
 }
