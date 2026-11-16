@@ -191,6 +191,7 @@ function createBot(opts) {
 
   async function groupBura(msg) {
     const chat = msg.chat;
+    if (st() && st().group) st().group(chat, true);
     const g = hub.ensureGroup(chat.id, chat.title || '');
     // Boʻsh oʻrinli kutayotgan stol boʻlmasa — yangisini ochamiz
     const waiting = hub.hallTables(g).some(function (r) { return r.phase === 'lobby' && r.seats.some(function (s) { return !s; }); });
@@ -278,6 +279,48 @@ function createBot(opts) {
     if (cmd === 'bura' || cmd === 'start' || cmd === 'play' || cmd === 'yangi') return isPrivate ? newTable(msg) : groupBura(msg);
     if (cmd === 'qoidalar' || cmd === 'rules') return send(msg.chat.id, RULES, thread);
     if (cmd === 'help' || cmd === 'yordam') return send(msg.chat.id, HELP, thread);
+    if ((cmd === 'statistika' || cmd === 'stat') && isPrivate) return ownerStats(msg);
+  }
+
+  // ---------- faqat bot egasi uchun statistika ----------
+  function ownerOf() {
+    if (cfg.ownerId) return String(cfg.ownerId);
+    return st() ? st().owner : '';
+  }
+  function st() { return hub.stats || null; }
+  function n(x) { return String(x).replace(/\B(?=(\d{3})+(?!\d))/g, ' '); }
+  function ownerStats(msg) {
+    const S = st();
+    if (!S || !S.report) return;
+    const uid = String(msg.from && msg.from.id);
+    let note = '';
+    if (!ownerOf()) {             // birinchi soʻragan — egasi sifatida saqlanadi
+      S.owner = uid; S.save(); if (S.flush) S.flush();
+      console.log('[bot] /statistika egasi belgilandi: ' + uid);
+      note = '🔐 Siz bot egasi sifatida belgilandingiz — bu buyruq endi faqat sizga ishlaydi.\n\n';
+      api.call('setMyCommands', { commands: COMMANDS.concat([{ command: 'statistika', description: 'Bot statistikasi (faqat siz)' }]),
+        scope: { type: 'chat', chat_id: Number(uid) } }).catch(function () {});
+    }
+    if (ownerOf() !== uid) return; // boshqalarga hech narsa javob bermaymiz
+    const R = S.report(), T = R.total;
+    const row = function (title, p) {
+      return '<b>' + title + '</b>\n' +
+        '👤 ' + n(p.users) + ' kishi kirdi (yangi: ' + n(p.fresh) + ')\n' +
+        '🚪 ' + n(p.visits) + ' marta ochildi · 🃏 ' + n(p.rounds) + ' raund · ⏱ ' + p.playH + ' soat oʻyin';
+    };
+    const since = T.since ? new Date(T.since + 5 * 3600 * 1000).toISOString().slice(0, 10) : '—';
+    const L = [note + '📊 <b>Bura boti statistikasi</b>', '',
+      row('Bugun', R.today), '', row('Oxirgi 7 kun', R.week), '', row('Oxirgi 30 kun', R.month), '',
+      '<b>Jami</b> (' + since + ' dan)',
+      '👤 ' + n(T.players) + ' oʻyinchi · 🚪 ' + n(T.visits) + ' kirish',
+      '🃏 ' + n(T.rounds) + ' raund (oʻyinchi hisobida) · ⏱ ' + T.playH + ' soat oʻyin, ' + T.appH + ' soat ilovada', '',
+      '👥 Guruhlar: ' + R.groups + ' ta (7 kunda faol: ' + R.groups7 + ')' + (R.groupsLeft ? ' · chiqarilgan: ' + R.groupsLeft : '')];
+    if (R.top.length) {
+      L.push('', '🏆 <b>Eng koʻp oʻynaganlar</b>');
+      R.top.forEach(function (u, i) { L.push((i + 1) + '. ' + esc(u.name) + ' — ' + u.rounds + ' raund, ' + u.playH + ' soat'); });
+    }
+    L.push('', '<i>Kunlik va guruh hisoboti 16-noyabrdan yuritila boshlandi.</i>');
+    return send(msg.chat.id, L.join('\n'));
   }
 
   function welcome(msg) {
@@ -301,6 +344,10 @@ function createBot(opts) {
     if (!me || !cm.new_chat_member || cm.new_chat_member.user.id !== me.id) return;
     const was = cm.old_chat_member && cm.old_chat_member.status;
     const now = cm.new_chat_member.status;
+    if (cm.chat.type !== 'private' && cm.chat.type !== 'channel' && st() && st().group) {
+      if (now === 'member' || now === 'administrator') st().group(cm.chat, true);
+      else if (now === 'left' || now === 'kicked') st().group(cm.chat, false);
+    }
     if ((now === 'member' || now === 'administrator') && (was === 'left' || was === 'kicked') && cm.chat.type !== 'channel') {
       return send(cm.chat.id, 'Salom! 🃏 Men Bura oʻyini botiman.\nOʻyin zalini ochish uchun /bura yozing — tugmani bosib, stol tanlaysiz. 4 kishi yigʻilsa, oʻyin boshlanadi.');
     }
@@ -317,6 +364,8 @@ function createBot(opts) {
     }
     console.log('[bot] @' + me.username + ' ishga tushdi');
     api.call('setMyCommands', { commands: COMMANDS }).catch(function (e) { console.warn('[bot]', e.message); });
+    if (ownerOf()) api.call('setMyCommands', { commands: COMMANDS.concat([{ command: 'statistika', description: 'Bot statistikasi (faqat siz)' }]),
+      scope: { type: 'chat', chat_id: Number(ownerOf()) } }).catch(function () {});
     if (/^https:\/\//.test(cfg.publicUrl)) {
       api.call('setChatMenuButton', { menu_button: { type: 'web_app', text: 'Bura', web_app: { url: cfg.publicUrl + '/' } } })
         .catch(function (e) { console.warn('[bot] menyu tugmasi:', e.message); });

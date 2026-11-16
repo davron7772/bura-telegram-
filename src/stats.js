@@ -44,6 +44,9 @@ function Stats(opts) {
   this.file = opts.file || null;
   this.now = opts.now || Date.now;
   this.users = new Map();
+  this.daily = {};   // 'YYYY-MM-DD' (Toshkent) -> { u: [id...], v, r, ms }
+  this.groups = {};  // chatId -> { t: nom, a: qoʻshilgan, s: oxirgi faollik, on }
+  this.owner = '';   // /statistika koʻra oladigan yagona foydalanuvchi
   this.timer = null;
   this.remote = opts.remote || null;   // Yandex Disk (read/write)
   this.remoteMs = opts.remoteMs || 30000;
@@ -61,10 +64,13 @@ P.load = function () {
   if (data && Array.isArray(data.users)) {
     for (const u of data.users) if (u && u.id) this.users.set(String(u.id), u);
   }
+  if (data && data.daily && typeof data.daily === 'object') this.daily = data.daily;
+  if (data && data.groups && typeof data.groups === 'object') this.groups = data.groups;
+  if (data && data.owner) this.owner = String(data.owner);
 };
 
 P.serialize = function () {
-  return JSON.stringify({ v: 1, users: Array.from(this.users.values()) });
+  return JSON.stringify({ v: 2, owner: this.owner, users: Array.from(this.users.values()), daily: this.daily, groups: this.groups });
 };
 
 // Masofadagi fayldan yuklash: koʻproq oʻynalgan yozuv ustun
@@ -148,9 +154,71 @@ P.visit = function (who) {
   const u = this.user(who);
   if (!u.first) u.first = this.now();
   u.visits = (u.visits || 0) + 1;
-  const day = new Date(this.now() + 5 * 3600 * 1000).toISOString().slice(0, 10); // Toshkent vaqti
+  const day = this.dayKey();
   if (u.day !== day) { u.day = day; u.days = (u.days || 0) + 1; }
+  const d = this.today();
+  d.v++;
+  if (d.u.indexOf(u.id) < 0) d.u.push(u.id);
   this.save();
+};
+
+// ---------- kunlik va guruh statistikasi ----------
+const DAY_MS = 86400000, KEEP_DAYS = 400;
+P.dayKey = function (t) {
+  return new Date((t == null ? this.now() : t) + 5 * 3600 * 1000).toISOString().slice(0, 10); // Toshkent vaqti
+};
+P.today = function () {
+  const k = this.dayKey();
+  let d = this.daily[k];
+  if (!d) {
+    d = this.daily[k] = { u: [], v: 0, r: 0, ms: 0 };
+    const keys = Object.keys(this.daily).sort();
+    while (keys.length > KEEP_DAYS) delete this.daily[keys.shift()];
+  }
+  return d;
+};
+// Stolda bitta raund tugadi (stol boʻyicha bir marta)
+P.tableRound = function () { this.today().r++; this.save(); };
+
+P.group = function (chat, on) {
+  if (!chat || chat.id == null) return;
+  const id = String(chat.id);
+  let g = this.groups[id];
+  if (!g) g = this.groups[id] = { t: '', a: this.now(), s: 0, on: true };
+  if (chat.title) g.t = String(chat.title).slice(0, 80);
+  if (on === false) g.on = false;
+  else { g.on = true; g.s = this.now(); }
+  this.save();
+};
+
+// Davr boʻyicha: oxirgi `days` kun (bugun ham kiradi)
+P.period = function (days) {
+  const set = new Set(), from = this.dayKey(this.now() - (days - 1) * DAY_MS);
+  let v = 0, r = 0, ms = 0;
+  for (const k in this.daily) {
+    if (k < from) continue;
+    const d = this.daily[k];
+    d.u.forEach(function (id) { set.add(id); });
+    v += d.v || 0; r += d.r || 0; ms += d.ms || 0;
+  }
+  let fresh = 0;
+  for (const u of this.users.values()) if (u.first && this.dayKey(u.first) >= from) fresh++;
+  return { users: set.size, visits: v, rounds: r, playH: Math.round(ms / 360000) / 10, fresh: fresh };
+};
+
+P.report = function () {
+  const self = this, now = this.now();
+  const gs = Object.keys(this.groups).map(function (k) { return self.groups[k]; });
+  const active = gs.filter(function (g) { return g.on; });
+  return {
+    today: this.period(1), week: this.period(7), month: this.period(30),
+    total: this.total(),
+    groups: active.length,
+    groupsLeft: gs.length - active.length,
+    groups7: active.filter(function (g) { return g.s && now - g.s < 7 * DAY_MS; }).length,
+    top: this.list(100).filter(function (u) { return u.rounds > 0; })
+      .sort(function (a, b) { return b.rounds - a.rounds; }).slice(0, 5)
+  };
 };
 
 // Ilovada oʻtkazilgan vaqt; seated — stolda oʻtirib oʻynagan vaqt
@@ -160,7 +228,7 @@ P.online = function (who, ms, seated) {
   const u = this.users.get(String(who.id));
   if (!u) return;
   u.appMs = (u.appMs || 0) + ms;
-  if (seated) u.playMs = (u.playMs || 0) + ms;
+  if (seated) { u.playMs = (u.playMs || 0) + ms; this.today().ms += ms; }
   this.save();
 };
 

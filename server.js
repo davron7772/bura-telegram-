@@ -23,6 +23,7 @@ const cfg = {
   botToken: String(process.env.BOT_TOKEN || '').trim(),
   publicUrl: publicUrl,
   appShortName: String(process.env.APP_SHORT_NAME || '').trim(),
+  ownerId: String(process.env.BOT_OWNER_ID || '').trim(),
   botMode: (process.env.BOT_MODE || (/^https:\/\//.test(publicUrl) ? 'webhook' : 'polling')).toLowerCase(),
   devMode: process.env.DEV_MODE === '1',
   turnSeconds: Math.max(10, Math.min(120, Number(process.env.TURN_SECONDS) || 30)),

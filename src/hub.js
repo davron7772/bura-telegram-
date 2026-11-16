@@ -318,6 +318,7 @@ class Hub {
 
   // Har raund natijasi logga yoziladi (keyin hisobni tekshirish uchun; ismlarsiz)
   logRound(r) {
+    if (this.stats && this.stats.tableRound) this.stats.tableRound();
     const x = r.lastResult;
     if (!x) return;
     const who = r.seats.map((s) => (s ? (s.bot ? 'bot' : 'odam') : '-')).join(',');
