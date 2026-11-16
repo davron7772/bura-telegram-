@@ -461,7 +461,7 @@
     'Oʻzingizni chiqara olmaysiz — «Stoldan turish»ni bosing': 'Нельзя убрать себя — нажмите «Встать из-за стола»',
     'bosing': 'нажмите',
     'Hamma oʻtirdi — «Tayyorman» bosing': 'Все сели — нажмите «Готов»',
-    'Tayyorman tugmasini bosing — aks holda mehmon rejimiga oʻtasiz': 'Нажмите «Готов» — иначе станете гостем',
+    'Tayyorman tugmasini bosing — vaqt tugasa, oʻyin baribir boshlanadi': 'Нажмите «Готов» — когда время выйдет, игра всё равно начнётся',
     'Tayyorman': 'Готов',
     'Siz tayyorsiz': 'Вы готовы',
     'Oʻyinchilar tayyorlanmoqda': 'Игроки готовятся',

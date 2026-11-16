@@ -138,7 +138,7 @@ test('lobbida botsiz boʻsh stol darhol yopilmaydi (zal oʻzi tozalaydi)', () =>
   assert.deepEqual(closed, []);
 });
 
-test('«Tayyorman»: hamma oʻtirgach 15 soniya; bosmagan — kuzatuvchi, qayta oʻtira oladi; hamma tayyor — boshlanadi', () => {
+test('«Tayyorman»: hamma oʻtirgach 15 soniya; vaqt tugasa — bosmaganlar joyida qoladi va oʻyin boshlanadi', () => {
   const c = fakeClock();
   const r = new Room({ id: 'r', now: c.now, setTimeout: c.setTimeout, clearTimeout: c.clearTimeout, requireReady: true, readyMs: 15000 });
   r.connect(U[0]); r.connect(U[1]);
@@ -151,17 +151,20 @@ test('«Tayyorman»: hamma oʻtirgach 15 soniya; bosmagan — kuzatuvchi, qayta 
   assert.equal(r.snapshot('u2').seats[0].ready, true);
   assert.equal(r.snapshot('u2').seats[2].ready, true, 'bot doim tayyor');
   c.advance(10500);
-  assert.equal(r.seatOf('u2'), -1, 'u2 bosmadi — kuzatuvchi');
-  assert.ok(r.spectators.has('u2'));
-  assert.ok(r.snapshot('u2').readyOut > 0);
+  assert.equal(r.seatOf('u2'), 1, 'u2 bosmadi, lekin joyida qoldi');
+  assert.equal(r.spectators.has('u2'), false);
+  assert.equal(r.phase, 'playing', 'vaqt tugadi — oʻyin boshlandi');
   assert.equal(r.snapshot('u1').readyIn, 0);
-  // Qayta oʻtiradi — yangi 15 soniya; ikkalasi bosadi — boshlanadi
-  assert.equal(r.sit('u2', 1), null);
-  assert.ok(r.snapshot('u1').readyIn > 14000);
-  assert.equal(r.seats[0].ready, true, 'oldin bosgan tayyorligicha qoladi');
-  r.setReady('u2');
-  assert.equal(r.phase, 'playing');
   assert.match(r.setReady('u1'), /boshlangan/);
+});
+
+test('«Tayyorman»: hamma bossa — vaqt kutmasdan darhol boshlanadi', () => {
+  const c = fakeClock();
+  const r = new Room({ id: 'r', now: c.now, setTimeout: c.setTimeout, clearTimeout: c.clearTimeout, requireReady: true, readyMs: 15000 });
+  r.connect(U[0]); r.connect(U[1]);
+  r.addBot('u1', 2); r.addBot('u1', 3);
+  r.setReady('u1'); r.setReady('u2');
+  assert.equal(r.phase, 'playing');
 });
 
 test('«Tayyorman»: kimdir turib ketsa, vaqt toʻxtaydi', () => {

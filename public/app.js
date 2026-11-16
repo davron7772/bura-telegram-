@@ -569,7 +569,7 @@
     const me = r.mySeat >= 0 ? r.seats[r.mySeat] : null;
     const left = '<b class="rleft" data-readyleft>' + Math.ceil(r.readyIn / 1000) + '</b>';
     let h = '<div class="readybar' + (me && !me.ready ? ' ask' : '') + '" role="region" aria-label="Tayyorlik">' + left + '<div class="rtxt">';
-    if (me && !me.ready) h += '<b>Hamma oʻtirdi!</b><small>Tayyorman tugmasini bosing — aks holda mehmon rejimiga oʻtasiz</small></div>' + btn('ready', 'Tayyorman', 'primary', S.busy);
+    if (me && !me.ready) h += '<b>Hamma oʻtirdi!</b><small>Tayyorman tugmasini bosing — vaqt tugasa, oʻyin baribir boshlanadi</small></div>' + btn('ready', 'Tayyorman', 'primary', S.busy);
     else h += '<b>' + (me ? 'Siz tayyorsiz' : 'Oʻyinchilar tayyorlanmoqda') + '</b><small>Tayyor: ' + n + '/' + sizeOf(r) + '</small></div>';
     return h + '</div>';
   }

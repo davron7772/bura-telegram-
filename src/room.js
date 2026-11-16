@@ -429,20 +429,12 @@ P.fixHost = function () {
     this.readyTimer = null;
     this.readyAt = 0;
   };
-  // Vaqtida «Tayyorman» bosmaganlar kuzatuvchi boʻladi (boʻsh oʻringa qayta oʻtira oladi)
+  // Vaqt tugadi — «Tayyorman» bosmaganlar ham oʻz joyida qoladi, oʻyin boshlanadi
   P.readyTimeout = function () {
     if (this.phase !== 'lobby') return;
-    const out = [];
-    for (let i = 0; i < this.size; i++) {
-      const s = this.seats[i];
-      if (!s || s.bot || s.ready) continue;
-      out.push(s.id);
-      this.seats[i] = null;
-      if (this.isOnline(s.id)) this.spectators.set(s.id, { id: s.id, name: s.name, photo: s.photo });
-    }
     this.readyAt = 0;
-    if (out.length) this.readyOut = { at: this.now(), ids: out };
-    this.fixHost();
+    if (this.filled() < this.size) { this.changed(); return; }
+    this.beginRound();
     this.changed();
   };
   P.setReady = function (uid) {
