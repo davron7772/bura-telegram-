@@ -660,7 +660,7 @@
     const sorted = inRoom ? list.filter(isMyLobby).concat(list.filter(function (t) { return !isMyLobby(t); })) : list;
     let html = '<div class="hall"><header class="hall-top"><div><h1>Oʻyin zali</h1><small>' +
       esc(h.title ? h.title + ' · ' : '') + (list.length ? list.length + ' ta stol' : 'hozircha stol yoʻq') + '</small></div>' +
-      (inRoom && VC ? micHTML('') : '') + langHTML() + linkBtn('rules', 'Qoidalar') + '</header>';
+      (inRoom && VC ? '<span class="vbtns">' + spkHTML('') + micHTML('') + '</span>' : '') + langHTML() + linkBtn('rules', 'Qoidalar') + '</header>';
     if (!list.length) html += '<p class="hall-empty">Hali hech kim oʻynamayapti. Birinchi stolni oching — boshqalar uni shu yerda koʻrib, qoʻshiladi.</p>';
     else html += '<p class="hall-hint">Istalgan stoldagi boʻsh oʻringa bosing — oʻsha jamoaga oʻtirasiz. Oʻyin ketayotgan stolni kuzatishingiz mumkin.</p>';
     html += '<div class="tables">' + sorted.map(hallCard).join('') + '</div>';
@@ -723,7 +723,7 @@
     const need = sizeOf(r) - filled;
     h += '<p class="status">' + (r.autoStart ? 'Hamma joyida — oʻyin boshlanmoqda…'
       : need > 0 ? 'Oʻyin ' + sizeOf(r) + ' kishi toʻlganda boshlanadi — yana ' + need + ' kishi kerak.' : '') + '</p>';
-    if (VC) h += '<div class="voice-row">' + micHTML('big') + '<div class="vtxt" data-vtext>' + voiceTextHTML() + '</div></div>';
+    if (VC) h += '<div class="voice-row"><span class="vbtns">' + spkHTML('big') + micHTML('big') + '</span><div class="vtxt" data-vtext>' + voiceTextHTML() + '</div></div>';
     h += '<div class="lobby-actions">';
     if (!DEMO && need > 0) h += btn('share', iconSvg('i-send') + 'Doʻstlarni taklif qilish', 'primary ico');
     if (canManage(r) && need > 0) h += btn('fillBots', need === 1 ? 'Boʻsh oʻringa bot qoʻshish' : 'Qolgan ' + need + ' oʻringa bot qoʻshish', DEMO ? 'primary' : 'secondary', S.busy);
@@ -773,7 +773,7 @@
     if (g.trick) g.trick.plays.forEach(function (p, i) { plays[p.seat] = { p: p, i: i }; });
 
     let h = '<header class="bar"><button type="button" class="icon" data-act="menu" aria-label="Menyu">' + iconSvg('i-menu') + '</button>' +
-      '<div class="title"><b>' + (r.no ? r.no + '-stol' : 'Bura') + '</b><span>' + r.round + '-raund</span></div>' + micHTML('') + scoreChip(r) + '</header>';
+      '<div class="title"><b>' + (r.no ? r.no + '-stol' : 'Bura') + '</b><span>' + r.round + '-raund</span></div><span class="vbtns">' + spkHTML('') + micHTML('') + '</span>' + scoreChip(r) + '</header>';
     h += '<section class="field">' + GUL + T3D + '<div class="opps">' + ['l', 't', 'r'].map(function (p) { return oppHTML(r, seatAt[p], p); }).join('') + '</div>';
     h += '<div class="trick" id="trick">';
     ['l', 't', 'r'].forEach(function (p) { h += slotHTML(r, p, seatAt[p], plays); });
@@ -1024,13 +1024,23 @@
     return null;
   }
 
+  // Mikrofon tugmasi — faqat mikrofon (gapirish)
   function micView() {
-    const v = VC.state, n = v.roster.length;
-    if (v.status === 'off') return { cls: 's-off', icon: 'i-mic', badge: n, label: n ? 'Ovozli chatga qoʻshilish: ' + n + ' kishi gaplashyapti' : 'Ovozli chatni yoqish' };
-    if (v.status === 'joining') return { cls: 's-join', icon: 'i-mic', badge: 0, label: v.offline ? 'Ovozli chat qayta ulanmoqda' : 'Ovozli chat ulanmoqda. Bekor qilish' };
-    if (v.mic === 'none') return { cls: 's-listen', icon: 'i-head', badge: 0, label: 'Siz faqat eshityapsiz. Mikrofonni yoqish' };
-    if (v.mic === 'muted') return { cls: 's-mute', icon: 'i-mic-off', badge: 0, label: 'Mikrofon oʻchiq. Yoqish' };
-    return { cls: 's-on', icon: 'i-mic', badge: 0, label: 'Mikrofon yoqiq. Oʻchirish' };
+    const v = VC.state;
+    if (v.status === 'joining' && !v.offline && !v.me) return { cls: 's-join', icon: 'i-mic', badge: 0, label: 'Mikrofon ulanmoqda' };
+    if (v.status === 'live' && v.mic === 'on') return { cls: 's-on', icon: 'i-mic', badge: 0, label: 'Mikrofon yoqiq. Oʻchirish' };
+    return { cls: 's-mute', icon: 'i-mic-off', badge: 0, label: 'Mikrofon oʻchiq. Yoqish' };
+  }
+  // Karnay tugmasi — boshqalarni eshitish (sukut boʻyicha yoqiq)
+  function spkView() {
+    const v = VC.state, on = v.status !== 'off' && !v.deaf;
+    return on ? { cls: 'spk s-listen', icon: 'i-head', label: 'Ovoz yoqiq — boshqalarni eshityapsiz. Oʻchirish' }
+      : { cls: 'spk s-mute', icon: 'i-head-off', label: 'Ovoz oʻchiq. Yoqish' };
+  }
+  function spkHTML(size) {
+    if (!VC) return '';
+    const sv = spkView();
+    return '<button type="button" class="mic ' + (size ? size + ' ' : '') + sv.cls + '" data-size="' + (size || '') + '" data-act="speaker" aria-label="' + esc(sv.label) + '" aria-pressed="' + (sv.cls.indexOf('s-listen') > 0) + '">' + iconSvg(sv.icon) + '</button>';
   }
   function micClass(size, mv) {
     const v = VC.state;
@@ -1130,6 +1140,15 @@
       if (b.className !== cls) b.className = cls;
       b.setAttribute('aria-label', mv.label);
       setHTML(b, micInner(mv));
+    });
+    const sv = spkView();
+    app.querySelectorAll('.mic[data-act="speaker"]').forEach(function (b) {
+      const sz = b.getAttribute('data-size');
+      const cls = 'mic ' + (sz ? sz + ' ' : '') + sv.cls;
+      if (b.className !== cls) b.className = cls;
+      b.setAttribute('aria-label', sv.label);
+      b.setAttribute('aria-pressed', String(sv.cls.indexOf('s-listen') > 0));
+      setHTML(b, iconSvg(sv.icon));
     });
     app.querySelectorAll('[data-vs]').forEach(function (el) {
       const e = voiceAt(Number(el.getAttribute('data-vs')));
@@ -1556,6 +1575,11 @@
         return send(seat >= 0 ? { t: 'join', room: el.getAttribute('data-room'), seat: seat } : { t: 'join', room: el.getAttribute('data-room') }, true);
       }
       case 'voice': if (VC) VC.toggleMic(); return;
+      case 'speaker':
+        if (!VC) return;
+        if (VC.state.status === 'off') { VC.setDeaf(false); VC.listen(); if (S.room) S.autoListen = S.room.id; }
+        else VC.setDeaf(!VC.state.deaf);
+        return paintVoice();
       case 'voice-leave': if (VC) VC.leave(); return;
       case 'vsilence': if (VC) VC.silence(el.getAttribute('data-v')); return;
     }

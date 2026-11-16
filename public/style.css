@@ -894,3 +894,21 @@ button.hs:focus-visible { outline: 2px solid #fff; outline-offset: 2px; border-r
 .invited { text-align: center; }
 .invited .hava.big { width: 72px; height: 72px; margin: 4px auto 10px; font-size: 28px; }
 .invited .lobby-actions { margin-top: 14px; }
+.vbtns { display: inline-flex; gap: 8px; align-items: center; flex: none; }
+/* Zal sarlavhasi: ovoz tugmalari sigʻishi uchun */
+.hall-top h1 { white-space: nowrap; }
+.hall-top .vbtns { gap: 6px; margin-left: auto; }
+.hall-top .vbtns .mic { width: 38px; height: 38px; }
+.hall-top { gap: 8px; }
+.hall-top .vbtns .mic { margin: 0; }
+.hall-top .vbtns + .langsw { margin-left: 0; margin-right: 6px; }
+@media (max-width: 400px) {
+  .hall-top h1 { font-size: 25px; }
+  .hall-top .vbtns .mic { width: 36px; height: 36px; }
+  .hall-top .vbtns .mic svg { width: 19px; height: 19px; }
+}
+@media (max-width: 370px) {
+  .hall-top { gap: 5px; }
+  .hall-top h1 { font-size: 22px; }
+  .hall-top .vbtns { gap: 4px; }
+}

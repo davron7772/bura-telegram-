@@ -80,6 +80,7 @@
       max: 6,
       talking: new Set(),   // hozir gapirayotganlar (vid)
       silenced: new Set(),  // men oʻzim uchun ovozini oʻchirganlar (vid)
+      deaf: false,          // karnay oʻchiq: hech kimni eshitmayman (ovozli chatda qolaman)
       peers: new Map(),     // vid -> ulanish
       offline: false,       // server bilan aloqa uzildi, qayta ulanishni kutyapmiz
       blocked: false        // brauzer ovozni bosishsiz chalishga ruxsat bermadi
@@ -134,7 +135,7 @@
     function play(p) {
       const el = p.el;
       if (!el || !el.srcObject) return;
-      el.muted = V.silenced.has(p.vid);
+      el.muted = V.deaf || V.silenced.has(p.vid);
       let pr;
       try { pr = el.play(); } catch (e) { return; }
       if (pr && pr.catch) {
@@ -581,7 +582,7 @@
         const node = outNode();
         if (!node) return;
         R = { next: 0, gain: ctx.createGain(), level: 0, heardAt: 0, n: 0 };
-        R.gain.gain.value = V.silenced.has(vid) ? 0 : 1;
+        R.gain.gain.value = V.deaf || V.silenced.has(vid) ? 0 : 1;
         R.gain.connect(node);
         rx.set(vid, R);
         onChange();
@@ -849,7 +850,7 @@
     function toggleMic() {
       unlock();
       if (V.status === 'off') return join();
-      if (V.status === 'joining') return stop('user'); // bekor qilish
+      if (V.status === 'joining') return; // ulanmoqda — kutamiz (eshitish uzilmasin)
       if (!track) return retryMic();
       track.enabled = !track.enabled;
       V.mic = track.enabled ? 'on' : 'muted';
@@ -891,9 +892,18 @@
     function silence(vid) {
       if (V.silenced.has(vid)) V.silenced.delete(vid); else V.silenced.add(vid);
       const p = V.peers.get(vid);
-      if (p && p.el) p.el.muted = V.silenced.has(vid);
+      if (p && p.el) p.el.muted = V.deaf || V.silenced.has(vid);
       const R = rx.get(vid);
-      if (R) R.gain.gain.value = V.silenced.has(vid) ? 0 : 1;
+      if (R) R.gain.gain.value = V.deaf || V.silenced.has(vid) ? 0 : 1;
+      onChange();
+    }
+
+    // Eshitishni butunlay oʻchirish/yoqish (karnay tugmasi). Ovozli chatdan chiqilmaydi.
+    function setDeaf(on) {
+      V.deaf = !!on;
+      V.peers.forEach(function (p) { if (p.el) p.el.muted = V.deaf || V.silenced.has(p.vid); });
+      rx.forEach(function (R, vid) { R.gain.gain.value = V.deaf || V.silenced.has(vid) ? 0 : 1; });
+      if (!V.deaf) unlock();
       onChange();
     }
 
@@ -934,6 +944,7 @@
       toggleMic: toggleMic,
       unlock: unlock,
       silence: silence,
+      setDeaf: setDeaf,
       onMessage: onMessage,
       onBinary: onBinary,
       setRoster: setRoster,
