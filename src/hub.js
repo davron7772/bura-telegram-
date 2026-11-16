@@ -106,7 +106,7 @@ class Hub {
       readyMs: this.cfg.readyMs,
       rng: cryptoRng,
       onChange: function (r) { self.broadcast(r); },
-      onRoundEnd: function (r) { self.onRoomChange(r, 'roundEnd'); },
+      onRoundEnd: function (r) { self.logRound(r); self.onRoomChange(r, 'roundEnd'); },
       onEmpty: function (r, why) { self.closeRoom(r, why); }
     });
     this.rooms.set(id, room);
@@ -314,6 +314,16 @@ class Hub {
     if (room) return this.enter(c, room, seat);
     this.send(c, { t: 'error', msg: 'Stol topilmadi — u yopilgan boʻlishi mumkin' });
     this.enterHall(c, this.publicHall());
+  }
+
+  // Har raund natijasi logga yoziladi (keyin hisobni tekshirish uchun; ismlarsiz)
+  logRound(r) {
+    const x = r.lastResult;
+    if (!x) return;
+    const who = r.seats.map((s) => (s ? (s.bot ? 'bot' : 'odam') : '-')).join(',');
+    console.log('[raund] stol ' + r.id + ' #' + x.round + ' (' + r.size + ' kishi: ' + who + ') ' + x.type +
+      ' ochko ' + (x.points || []).join(':') + ' · yutqazgan ' + (x.loser >= 0 ? (x.loser + 1) + '-tomon' : '-') +
+      ' +' + (x.award || 0) + (x.bonus ? ' (' + x.base + '+' + x.bonus + ' durang)' : '') + ' · hisob ' + (x.score || []).join(':'));
   }
 
   // ---------- Guruhdoshlar: kirganini bildirish va stolga chaqirish ----------
