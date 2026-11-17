@@ -289,7 +289,25 @@ function createBot(opts) {
   }
   function st() { return hub.stats || null; }
   function n(x) { return String(x).replace(/\B(?=(\d{3})+(?!\d))/g, ' '); }
-  function ownerStats(msg) {
+  // Nomi yoki a'zolar soni nomaʼlum guruhlarni Telegramdan soʻrab toʻldiramiz
+  async function refreshGroups(S) {
+    const ids = Object.keys(S.groups).filter(function (id) { return S.groups[id].on; }).slice(0, 60);
+    await Promise.all(ids.map(async function (id) {
+      const g = S.groups[id];
+      try {
+        const c = await api.call('getChat', { chat_id: Number(id) });
+        if (c && c.title) g.t = String(c.title).slice(0, 80);
+        if (c && c.username) g.u = c.username;
+        const cnt = await api.call('getChatMemberCount', { chat_id: Number(id) }).catch(function () { return null; });
+        if (typeof cnt === 'number') g.m = cnt;
+      } catch (e) {
+        if (e.code === 400 || e.code === 403) g.on = false; // bot guruhda emas
+      }
+    }));
+    S.save();
+  }
+
+  async function ownerStats(msg) {
     const S = st();
     if (!S || !S.report) return;
     const uid = String(msg.from && msg.from.id);
@@ -302,6 +320,7 @@ function createBot(opts) {
         scope: { type: 'chat', chat_id: Number(uid) } }).catch(function () {});
     }
     if (ownerOf() !== uid) return; // boshqalarga hech narsa javob bermaymiz
+    await refreshGroups(S).catch(function () {});
     const R = S.report(), T = R.total;
     const row = function (title, p) {
       return '<b>' + title + '</b>\n' +
@@ -315,6 +334,17 @@ function createBot(opts) {
       '👤 ' + n(T.players) + ' oʻyinchi · 🚪 ' + n(T.visits) + ' kirish',
       '🃏 ' + n(T.rounds) + ' raund (oʻyinchi hisobida) · ⏱ ' + T.playH + ' soat oʻyin, ' + T.appH + ' soat ilovada', '',
       '👥 Guruhlar: ' + R.groups + ' ta (7 kunda faol: ' + R.groups7 + ')' + (R.groupsLeft ? ' · chiqarilgan: ' + R.groupsLeft : '')];
+    const on = R.groupList.filter(function (g) { return g.on; });
+    if (on.length) {
+      L.push('', '👥 <b>Bot turgan guruhlar</b>');
+      on.forEach(function (g, i) {
+        const name = esc(g.t || ('ID ' + g.id));
+        L.push((i + 1) + '. ' + (g.u ? '<a href="https://t.me/' + g.u + '">' + name + '</a>' : name) +
+          (typeof g.m === 'number' ? ' — ' + g.m + ' aʼzo' : ''));
+      });
+    }
+    const off = R.groupList.filter(function (g) { return !g.on; });
+    if (off.length) L.push('', '🚫 Chiqarilgan: ' + off.map(function (g) { return esc(g.t || ('ID ' + g.id)); }).join(', '));
     if (R.top.length) {
       L.push('', '🏆 <b>Eng koʻp oʻynaganlar</b>');
       R.top.forEach(function (u, i) { L.push((i + 1) + '. ' + esc(u.name) + ' — ' + u.rounds + ' raund, ' + u.playH + ' soat'); });

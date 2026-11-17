@@ -473,6 +473,7 @@ class Hub {
       this.groups.set(key, g);
     }
     if (title) g.title = String(title).slice(0, 64);
+    if (chatId !== PUBLIC_ID && this.stats && this.stats.group) this.stats.group({ id: chatId, title: title || '' }, true);
     return g;
   }
 

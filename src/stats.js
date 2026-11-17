@@ -187,7 +187,12 @@ P.group = function (chat, on) {
   if (!g) g = this.groups[id] = { t: '', a: this.now(), s: 0, on: true };
   if (chat.title) g.t = String(chat.title).slice(0, 80);
   if (on === false) g.on = false;
-  else { g.on = true; g.s = this.now(); }
+  else {
+    g.on = true;
+    const t = this.now();
+    if (t - (g.s || 0) < 60000 && !chat.title) return; // tez-tez yozmaslik
+    g.s = t;
+  }
   this.save();
 };
 
@@ -216,6 +221,8 @@ P.report = function () {
     groups: active.length,
     groupsLeft: gs.length - active.length,
     groups7: active.filter(function (g) { return g.s && now - g.s < 7 * DAY_MS; }).length,
+    groupList: Object.keys(this.groups).map(function (id) { return Object.assign({ id: id }, self.groups[id]); })
+      .sort(function (a, b) { return (b.on - a.on) || (b.s || 0) - (a.s || 0); }),
     top: this.list(100).filter(function (u) { return u.rounds > 0; })
       .sort(function (a, b) { return b.rounds - a.rounds; }).slice(0, 5)
   };
