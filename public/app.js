@@ -264,6 +264,9 @@
       }
       setRoom(m.room, m.invite);
     }
+    else if (m.t === 'welcome') { S.myRef = (m.me && m.me.ref) || ''; S.refOn = !!m.refOn; if (S.screen === 'hall') render(); }
+    else if (m.t === 'ref') { S.ref = m; if (S.sheet && (S.sheet.type === 'ref' || S.sheet.type === 'refclaim')) render(); }
+    else if (m.t === 'toast') { toast(m.msg, 4500); haptic('success'); }
     else if (m.t === 'stats') {
       S.stats = { list: m.list || [], me: m.me || null, min: m.min || 3, total: m.total || null };
       if (S.sheet && S.sheet.type === 'stats') render();
@@ -665,6 +668,7 @@
     else html += '<p class="hall-hint">Istalgan stoldagi boʻsh oʻringa bosing — oʻsha jamoaga oʻtirasiz. Oʻyin ketayotgan stolni kuzatishingiz mumkin.</p>';
     html += '<div class="tables">' + sorted.map(hallCard).join('') + '</div>';
     html += '<div class="hall-actions">' + btn('hnew', '+ Yangi stol ochish', list.length ? 'secondary wide' : 'primary wide', S.busy) +
+      (DEMO || !S.refOn ? '' : '<button type="button" class="effbtn refbtn" data-act="ref"><span class="effico" aria-hidden="true">🎁</span><span><b>Doʻst chaqiring — Premium yuting</b><small>Telegram Premium 3, 6 yoki 12 oyga</small></span></button>') +
       (DEMO ? '' : '<button type="button" class="effbtn" data-act="stats"><span class="effico" aria-hidden="true">★</span><span><b>Oʻyinchilar reytingi</b><small>Mahorat va tajriba boʻyicha</small></span></button>') + '</div>';
     if (inRoom && !DEMO) html += '<div class="hall-set">' + skinToggle() + '</div>';
     if (inRoom) html += readyBarHTML(S.room);
@@ -1207,6 +1211,8 @@
       case 'result': body = r && r.result ? resultHTML(r) : ''; break;
       case 'create': body = createHTML(); break;
       case 'stats': body = statsHTML(); break;
+      case 'ref': body = refHTML(); break;
+      case 'refclaim': body = refClaimHTML(); break;
       case 'items': body = itemsHTML(); break;
       case 'invite': body = inviteHTML(); break;
       case 'invited': body = invitedHTML(); break;
@@ -1315,6 +1321,7 @@
     if (r.isHost && r.phase === 'roundEnd') h += btn('lobby', 'Lobbiga qaytish (yangi match)', 'secondary');
     if (!DEMO) h += btn('share', 'Doʻstlarni chaqirish', 'secondary');
     h += btn('rules', 'Qoidalar', 'secondary') + '</div>';
+    if (!DEMO && S.refOn) h += '<button type="button" class="effbtn refbtn" data-act="ref"><span class="effico" aria-hidden="true">🎁</span><span><b>Doʻst chaqiring — Premium yuting</b><small>Telegram Premium 3, 6 yoki 12 oyga</small></span></button>';
     h += '<button type="button" class="effbtn" data-act="stats"><span class="effico" aria-hidden="true">★</span><span><b>Oʻyinchilar reytingi</b><small>Mahorat va tajriba boʻyicha</small></span></button>';
     h += viewToggle() + (DEMO ? '' : skinToggle());
     h += '<h2>Hisob</h2><p class="sub">' + (r.round ? r.round + '-raund. Raundda yutqazgan jamoaga ball yoziladi; ' + r.lose + ' ballga yetgan jamoa matchni boy beradi.' : 'Oʻyin hali boshlanmadi') + '</p>' + teamsHTML(r, null);
@@ -1364,6 +1371,99 @@
     h += '<ol class="eff-list">' + d.list.map(function (u) { return row(u, u.ranked ? n++ : 0); }).join('') + '</ol>';
     h += '<p class="note">«—» — hali ' + d.min + ' raunddan kam oʻynagan. Botlar hisoblanmaydi.</p>';
     return h + '<div class="lobby-actions">' + (S.room ? btn('menu', 'Orqaga', 'secondary') : btn('close', 'Yopish', 'primary')) + '</div>';
+  }
+
+  // ---------- Doʻst va guruh taklif dasturi ----------
+  function monthsTxt(n) { return n === 12 ? '1 yillik' : n + ' oylik'; }
+  function refHTML() {
+    const d = S.ref;
+    let h = '<h2>Doʻst chaqiring — Premium yuting</h2>';
+    if (!d) return h + '<p class="status">Yuklanmoqda…</p>';
+    if (d.off) return h + '<p class="status">Dastur hozircha ishlamayapti.</p>';
+    const R = d.rules;
+    h += '<p class="sub">Shaxsiy havolangizni yuboring yoki botni guruhlarga qoʻshing. Faol boʻlgan har bir doʻst va guruh hisobingizga yoziladi.</p>';
+    h += '<div class="ref-link"><code>' + esc(d.link || '—') + '</code><div class="btns">' + btn('refshare', 'Havolani yuborish', 'primary') + btn('refcopy', 'Nusxa olish', 'secondary') + '</div></div>';
+    h += '<div class="ref-bal"><span><b>' + d.fr + '</b><small>doʻst</small></span><span><b>' + d.gr + '</b><small>guruh</small></span></div>';
+    // bosqichlar
+    h += '<ol class="ref-tiers">';
+    d.tiers.forEach(function (t) {
+      const fOk = d.fr >= t.friends, gOk = d.gr >= t.groups;
+      const pf = Math.min(100, Math.round(d.fr / t.friends * 100)), pg = Math.min(100, Math.round(d.gr / t.groups * 100));
+      h += '<li class="ref-tier' + (fOk || gOk ? ' ready' : '') + '"><div class="rt-top"><b>⭐ ' + monthsTxt(t.months) + ' Telegram Premium</b></div>' +
+        '<div class="rt-row"><span>' + t.friends + ' ta doʻst</span><span class="eff-bar"><span class="hi" style="width:' + pf + '%"></span></span><em>' + Math.min(d.fr, t.friends) + '/' + t.friends + '</em></div>' +
+        '<div class="rt-row"><span>yoki ' + t.groups + ' ta guruh</span><span class="eff-bar"><span class="hi" style="width:' + pg + '%"></span></span><em>' + Math.min(d.gr, t.groups) + '/' + t.groups + '</em></div>' +
+        (d.pending ? '' : (fOk ? btn('refclaim', 'Doʻstlar evaziga olish', 'primary', false, ' data-kind="friends" data-m="' + t.months + '"') : '') +
+          (gOk ? btn('refclaim', 'Guruhlar evaziga olish', 'primary', false, ' data-kind="groups" data-m="' + t.months + '"') : '')) + '</li>';
+    });
+    h += '</ol>';
+    if (d.claims && d.claims.length) {
+      h += '<h3>Soʻrovlarim</h3><ul class="ref-list">';
+      d.claims.slice().reverse().forEach(function (c) {
+        const st = c.status === 'pending' ? '⏳ koʻrib chiqilmoqda' : c.status === 'sent' ? '✅ yuborildi' : c.status === 'failed' ? '⚠️ yuborilmadi — hisob qaytarildi' : '✖️ rad etildi — hisob qaytarildi';
+        h += '<li><b>' + monthsTxt(c.months) + ' Premium</b><small>' + st + '</small></li>';
+      });
+      h += '</ul>';
+    }
+    // doʻstlar
+    h += '<h3>Doʻstlarim</h3>';
+    if (!d.friends.length) h += '<p class="note">Hali hech kim havolangiz orqali kirmagan.</p>';
+    else {
+      h += '<ul class="ref-list">';
+      d.friends.forEach(function (f) {
+        h += '<li><b>' + esc(f.name) + '</b><small>' + (f.ok ? '✅ tasdiqlandi' : '⏳ ' + f.rounds + '/' + R.friendRounds + ' raund · ' + f.days + '/' + R.friendDays + ' kun') + '</small></li>';
+      });
+      h += '</ul>';
+    }
+    h += '<h3>Guruhlarim</h3>';
+    if (!d.groups.length) h += '<p class="note">Botni guruhga siz qoʻshsangiz, guruh shu yerda koʻrinadi.</p>';
+    else {
+      h += '<ul class="ref-list">';
+      d.groups.forEach(function (g) {
+        h += '<li><b>' + esc(g.title) + '</b><small>' + (g.ok ? '✅ tasdiqlandi' : !g.on ? '✖️ bot guruhdan chiqarilgan'
+          : '⏳ ' + g.players + '/' + R.groupPlayers + ' oʻyinchi · ' + (g.members == null ? '?' : g.members) + '/' + R.groupMembers + ' aʼzo · ' + g.days + '/' + R.groupDays + ' kun') + '</small></li>';
+      });
+      h += '</ul>';
+    }
+    h += '<details class="ref-rules"><summary>Shartlar</summary><ul>' +
+      '<li>Doʻst havolangiz orqali <b>birinchi marta</b> kirgan boʻlishi kerak.</li>' +
+      '<li>Doʻst odamlarga qarshi kamida ' + R.friendRounds + ' raund oʻynasa (siz bilan birga oʻynagan raundlar hisoblanmaydi) va kamida ' + R.friendDays + ' xil kunda kirsa — tasdiqlanadi.</li>' +
+      '<li>Guruh: botni siz qoʻshgan boʻlishingiz, guruhda kamida ' + R.groupMembers + ' aʼzo boʻlishi, kamida ' + R.groupPlayers + ' kishi ' + R.groupRounds + ' tadan raund oʻynashi va bot guruhda ' + R.groupDays + ' kun turishi kerak.</li>' +
+      '<li>Sovgʻani olsangiz, shu bosqich uchun sarflangan doʻst yoki guruhlar hisobdan yechiladi. Olmasdan davom etsangiz — kattaroq sovgʻaga yetasiz.</li>' +
+      '<li>Har bir soʻrov tekshiriladi; aldov aniqlansa, hisob bekor qilinadi. Dastur istalgan vaqtda toʻxtatilishi mumkin — yigʻilgan hisob boʻyicha sovgʻalar beriladi.</li></ul></details>';
+    return h + '<div class="lobby-actions">' + btn('close', 'Yopish', 'secondary') + '</div>';
+  }
+  function refClaimHTML() {
+    const d = S.ref, c = S.refClaim;
+    if (!d || !c) return '';
+    const t = d.tiers.find(function (x) { return x.months === c.months; });
+    const fr = c.kind === 'friends', have = fr ? d.fr : d.gr, need = fr ? t.friends : t.groups;
+    const next = d.tiers.filter(function (x) { return x.months > c.months; })[0];
+    let h = '<h2>⭐ ' + monthsTxt(c.months) + ' Premium olasizmi?</h2>';
+    h += '<p class="sub">Olsangiz, hisobingizdan ' + need + ' ta ' + (fr ? 'doʻst' : 'guruh') + ' yechiladi (' + have + ' → ' + (have - need) + ').</p>';
+    if (next) {
+      const left = (fr ? next.friends : next.groups) - have;
+      h += '<p class="ref-tempt">🔥 Yana atigi <b>' + left + ' ta ' + (fr ? 'doʻst' : 'guruh') + '</b> — va <b>' + monthsTxt(next.months) + ' Premium</b> sizniki!</p>';
+    }
+    h += '<p class="note">Soʻrov tekshiriladi, keyin Premium Telegram orqali sizga sovgʻa boʻlib keladi.</p>';
+    return h + '<div class="lobby-actions">' + btn('refback', next ? 'Davom etaman' : 'Ortga', 'secondary') + btn('refgo', 'Hozir olaman', 'primary') + '</div>';
+  }
+  function refShare() {
+    const d = S.ref;
+    if (!d || !d.link) { toast('Havola hali tayyor emas'); return; }
+    haptic('light');
+    let text = 'Bura oʻynaymizmi? 🃏 Telegram ichida doʻstlar bilan karta oʻyini — kiring!';
+    if (window.BuraI18n) text = window.BuraI18n.t(text);
+    const url = 'https://t.me/share/url?url=' + encodeURIComponent(d.link) + '&text=' + encodeURIComponent(text);
+    try { if (TG && TG.isVersionAtLeast('6.1')) { TG.openTelegramLink(url); return; } } catch (e) { /* */ }
+    if (navigator.share) { navigator.share({ title: 'Bura', url: d.link }).catch(function () {}); return; }
+    window.open(url, '_blank');
+  }
+  function refCopy() {
+    const d = S.ref;
+    if (!d || !d.link) return;
+    const done = function () { toast('Havola nusxalandi'); haptic('success'); };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(d.link).then(done, function () { toast(d.link, 6000); });
+    else toast(d.link, 6000);
   }
 
   // Yutqazgan jamoaga nega shuncha ball yozilgani
@@ -1481,6 +1581,11 @@
 
   // Taklif havolasi: aniq oʻrin uchun stol raqamiga "s<oʻrin>" qoʻshiladi — doʻstingiz aynan oʻsha joyga oʻtiradi
   function inviteLink(seat) {
+    const l = inviteLink0(seat);
+    // stol havolasiga taklif qilgan odam belgisi ham qoʻshiladi (doʻst dasturi uchun)
+    return l && S.myRef && /[?&]startapp=[^&]+$/.test(l) ? l + '_' + S.myRef : l;
+  }
+  function inviteLink0(seat) {
     const r = S.room, link = S.invite;
     if (!link || !r || !(seat >= 0 && seat < sizeOf(r))) return link;
     return link.slice(-r.id.length) === r.id ? link + 's' + seat : link;
@@ -1512,6 +1617,12 @@
       case 'view': setView(el.getAttribute('data-v')); return render();
       case 'setitem': send({ t: 'item', item: el.getAttribute('data-item') || null }); S.sheet = null; return render();
       case 'stats': S.stats = null; send({ t: 'stats' }); return openSheet('stats');
+      case 'ref': send({ t: 'ref' }); return openSheet('ref');
+      case 'refshare': return refShare();
+      case 'refcopy': return refCopy();
+      case 'refclaim': S.refClaim = { kind: el.getAttribute('data-kind'), months: Number(el.getAttribute('data-m')) }; return openSheet('refclaim');
+      case 'refgo': if (S.refClaim) send({ t: 'claim', kind: S.refClaim.kind, months: S.refClaim.months }); S.refClaim = null; return openSheet('ref');
+      case 'refback': S.refClaim = null; return openSheet('ref');
       case 'result': return openSheet('result');
       case 'close':
         if (S.sheet && S.sheet.type === 'result' && r) S.resultClosedFor = r.round;

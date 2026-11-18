@@ -71,8 +71,14 @@ if (yaToken) {
   stats.loadRemote().then(function () { console.log('[stats] Yandex Diskdan yuklandi:', stats.users.size, 'oʻyinchi'); })
     .catch(function (e) { console.error('[stats] Yandex Diskdan yuklab boʻlmadi:', e.message); });
 } else console.log('[stats] fayl:', stats.file, '—', stats.users.size, 'oʻyinchi');
+const { Referral } = require('./src/referral');
+const referral = process.env.REFERRAL === '0' ? null : new Referral(stats, {
+  onEvent: function (type, d) { if (bot && bot.onReferral) bot.onReferral(type, d); }
+});
+stats.ref = referral;
 const hub = new Hub({
   stats: stats,
+  referral: referral,
   botToken: cfg.botToken,
   devMode: cfg.devMode,
   turnSeconds: cfg.turnSeconds,

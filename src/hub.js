@@ -1,4 +1,5 @@
 'use strict';
+const { Referral } = require('./referral');
 /* WebSocket ulanishlari, stollar va ovozli chat signallari. */
 const crypto = require('crypto');
 const { WebSocketServer } = require('ws');
@@ -61,6 +62,7 @@ class Hub {
     this.cfg = cfg;
     this.rooms = new Map();
     this.stats = cfg.stats || null; // oʻyinchilar samaradorligi va tashriflar
+    this.referral = cfg.referral || null; // doʻst/guruh taklif dasturi
     this.clients = new Set();
     this.invites = new Map(); // id -> { from, to, room, seat, at }
     this.invSent = new Map(); // kim>kimga -> vaqt (spam boʻlmasin)       // ulangan mijozlar (ilovada oʻtirgan vaqtni hisoblash uchun)
@@ -256,6 +258,14 @@ class Hub {
       if (!this.stats) return this.send(c, { t: 'stats', list: [], me: null, min: 3 });
       return this.send(c, { t: 'stats', list: this.stats.list(100), me: this.stats.me(c.user.id), min: require('./stats').MIN_ROUNDS, total: this.stats.total() });
     }
+    if (m.t === 'ref') return this.sendRef(c);
+    if (m.t === 'claim') {
+      if (!this.referral) return;
+      const res = this.referral.claim(c.user.id, m.kind, m.months);
+      if (res.error) this.send(c, { t: 'error', msg: res.error });
+      else this.send(c, { t: 'toast', msg: 'Soʻrovingiz yuborildi — tasdiqlangach, Premium Telegram orqali keladi' });
+      return this.sendRef(c);
+    }
     if (m.t === 'join') return this.join(c, m);
     if (m.t === 'invitable') return this.send(c, { t: 'invitable', list: this.invitable(c), seat: m.seat });
     if (m.t === 'invite') return this.invite(c, m);
@@ -289,11 +299,25 @@ class Hub {
     if (!user) return this.send(c, { t: 'auth_error', msg: 'Ilovani Telegram orqali oching' });
     if (c.room) this.detach(c);
     this.leaveHall(c);
-    if (this.stats && (!c.user || c.user.id !== user.id)) { this.tickTime(c); this.stats.visit(user); c.tick = Date.now(); }
+    const sp = Referral.parseStart(startParam);
+    startParam = sp.route;
+    if (this.stats && (!c.user || c.user.id !== user.id)) {
+      const old = this.stats.users.get(String(user.id));
+      const isNew = !old || (!old.visits && !old.rounds);
+      this.tickTime(c); this.stats.visit(user); c.tick = Date.now();
+      if (sp.ref && this.referral) this.referral.attach(user, sp.ref, isNew);
+    }
     c.user = user;
-    this.send(c, { t: 'welcome', me: { name: user.name } });
+    this.send(c, { t: 'welcome', me: { name: user.name, ref: /^tg:\d+$/.test(user.id) ? 'r' + user.id.slice(3) : '' }, refOn: !!this.referral });
     this.route(c, String(m.room || startParam || ''));
     this.announce(c);
+  }
+
+  sendRef(c) {
+    if (!this.referral) return this.send(c, { t: 'ref', off: true });
+    const id = String(c.user.id);
+    const link = /^tg:\d+$/.test(id) ? this.inviteLink('r' + id.slice(3)) : '';
+    this.send(c, Object.assign({ t: 'ref' }, this.referral.view(id, link)));
   }
 
   // Ilova ochilganda: zalga yoki aniq stolga

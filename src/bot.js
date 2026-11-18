@@ -4,7 +4,7 @@ const crypto = require('crypto');
 const { sleep, esc, displayName } = require('./util');
 const { MATCH_LOSE, MATCH_EDGE } = require('./engine');
 
-const ALLOWED_UPDATES = ['message', 'my_chat_member'];
+const ALLOWED_UPDATES = ['message', 'my_chat_member', 'callback_query'];
 
 const COMMANDS = [
   { command: 'bura', description: 'Oʻyin zali: stol tanlash yoki yangi stol' },
@@ -266,6 +266,7 @@ function createBot(opts) {
   // ---------- buyruqlar ----------
   async function onUpdate(u) {
     if (u.my_chat_member) return onMember(u.my_chat_member);
+    if (u.callback_query) return onCallback(u.callback_query);
     const msg = u.message;
     if (!msg || typeof msg.text !== 'string' || !me) return;
     const m = /^\/([a-z_]+)(?:@([a-z0-9_]+))?(?:\s+([\s\S]*))?$/i.exec(msg.text.trim());
@@ -275,12 +276,111 @@ function createBot(opts) {
     const isPrivate = msg.chat.type === 'private';
     const thread = msg.message_thread_id && msg.is_topic_message ? { message_thread_id: msg.message_thread_id } : {};
 
-    if (cmd === 'start' && isPrivate) return welcome(msg);
+    if (cmd === 'start' && isPrivate) {
+      const ref = hub.referral && m[3] ? /^r(\d{1,15})$/i.exec(m[3].trim()) : null;
+      if (ref && hub.stats) {
+        const who = { id: 'tg:' + msg.from.id, name: displayName(msg.from) };
+        const old = hub.stats.users.get(who.id);
+        hub.referral.attach(who, 'tg:' + ref[1], !old || (!old.visits && !old.rounds));
+      }
+      return welcome(msg);
+    }
     if (cmd === 'bura' || cmd === 'start' || cmd === 'play' || cmd === 'yangi') return isPrivate ? newTable(msg) : groupBura(msg);
     if (cmd === 'qoidalar' || cmd === 'rules') return send(msg.chat.id, RULES, thread);
     if (cmd === 'help' || cmd === 'yordam') return send(msg.chat.id, HELP, thread);
     if ((cmd === 'statistika' || cmd === 'stat') && isPrivate) return ownerStats(msg);
   }
+
+  // ---------- doʻst/guruh dasturi: xabarlar va Premium tasdiqlash ----------
+  function months(n) { return n === 12 ? '1 yillik' : n + ' oylik'; }
+  function dm(uid, text, extra) {
+    const id = /^tg:(\d+)$/.exec(String(uid || ''));
+    if (!id) return Promise.resolve();
+    return send(Number(id[1]), text, extra).catch(function () { /* bot bilan chat ochilmagan */ });
+  }
+  bot.onReferral = function (type, d) {
+    const R = require('./referral');
+    const T = R.TIERS;
+    if (type === 'friend_joined') return dm(d.inviter, '👋 ' + esc(d.name || 'Yangi oʻyinchi') + ' havolangiz orqali kirdi. U odamlar bilan 10 raund oʻynab, 2 kun kirsa — doʻst sifatida hisobga olinadi.');
+    if (type === 'friend_ok' || type === 'group_ok') {
+      const fr = type === 'friend_ok', n = d.count;
+      const next = T.find(function (t) { return (fr ? t.friends : t.groups) > n; });
+      const reached = T.filter(function (t) { return (fr ? t.friends : t.groups) <= n; }).pop();
+      let text = fr ? '🎉 Doʻstingiz ' + esc(d.name || '') + ' tasdiqlandi! Hisobingizda: <b>' + n + ' ta doʻst</b>.'
+        : '🎉 «' + esc(d.title) + '» guruhi tasdiqlandi! Hisobingizda: <b>' + n + ' ta guruh</b>.';
+      if (reached) text += '\n\n⭐ Siz ' + months(reached.months) + ' Telegram Premium olishingiz mumkin — ilovada «Doʻst chaqiring» boʻlimini oching.';
+      if (next) text += '\n' + (reached ? 'Yoki davom eting: yana ' : 'Yana ') + ((fr ? next.friends : next.groups) - n) + ' ta — ' + months(next.months) + ' Premium!';
+      return dm(d.inviter, text);
+    }
+    if (type === 'claim') return notifyOwnerClaim(d);
+  };
+
+  function notifyOwnerClaim(c) {
+    const owner = ownerOf();
+    if (!owner) return;
+    const S = st(), u = S && S.users.get(c.uid);
+    const L = ['🎁 <b>Premium soʻrovi</b>', '',
+      '👤 ' + esc(c.name || '—') + ' (ID ' + c.uid.slice(3) + ')',
+      '⭐ ' + months(c.months) + ' Premium — ' + c.stars + ' Stars',
+      '📌 Evaziga: ' + c.need + ' ta ' + (c.kind === 'friends' ? 'doʻst' : 'guruh')];
+    if (u) L.push('🃏 Oʻzi: ' + (u.rounds || 0) + ' raund, ' + (u.days || 0) + ' kun');
+    if (S && c.kind === 'friends') {
+      const fr = [];
+      for (const f of S.users.values()) if (f.refBy === c.uid && f.refOk) fr.push(esc(f.name || '?') + ' (' + (f.rounds || 0) + ' r.)');
+      L.push('', '<b>Tasdiqlangan doʻstlari:</b> ' + fr.slice(-40).join(', '));
+    } else if (S) {
+      const gs = Object.keys(S.groups).map(function (k) { return S.groups[k]; }).filter(function (g) { return g.by === c.uid && g.ok; });
+      L.push('', '<b>Guruhlari:</b> ' + gs.map(function (g) { return esc(g.t || '?') + (g.m ? ' (' + g.m + ')' : ''); }).join(', '));
+    }
+    L.push('', 'Tasdiqlasangiz, Premium botning Stars hisobidan yuboriladi.');
+    return send(Number(owner), L.join('\n'), { reply_markup: { inline_keyboard: [[
+      { text: '✅ Yuborish', callback_data: 'pg:' + c.id + ':y' }, { text: '✖️ Rad etish', callback_data: 'pg:' + c.id + ':n' }]] } })
+      .catch(function (e) { console.warn('[bot] egasiga xabar:', e.message); });
+  }
+
+  async function onCallback(q) {
+    const m = /^pg:([a-z0-9]+):([yn])$/.exec(q.data || '');
+    const answer = function (text) { return api.call('answerCallbackQuery', { callback_query_id: q.id, text: text || '' }).catch(function () {}); };
+    if (!m || !hub.referral) return answer();
+    if (String(q.from && q.from.id) !== ownerOf()) return answer('Faqat bot egasi uchun');
+    const R = hub.referral, c = R.findClaim(m[1]);
+    if (!c || c.status !== 'pending') return answer('Bu soʻrov allaqachon koʻrib chiqilgan');
+    const edit = function (line) {
+      if (!q.message) return;
+      return api.call('editMessageText', { chat_id: q.message.chat.id, message_id: q.message.message_id, parse_mode: 'HTML',
+        text: (q.message.text ? esc(q.message.text) : '') + '\n\n' + line }).catch(function () {});
+    };
+    if (m[2] === 'n') {
+      R.resolve(c.id, false);
+      await answer('Rad etildi');
+      await edit('✖️ <b>Rad etildi</b> — oʻyinchining hisobi qaytarildi.');
+      return dm(c.uid, '✖️ ' + months(c.months) + ' Premium soʻrovingiz rad etildi. Hisobingiz qaytarildi.');
+    }
+    await answer('Yuborilmoqda…');
+    try {
+      await api.call('giftPremiumSubscription', { user_id: Number(c.uid.slice(3)), month_count: c.months, star_count: c.stars,
+        text: 'Bura oʻyinidan sovgʻa! Doʻstlarni chaqirganingiz uchun rahmat 🃏' });
+      R.resolve(c.id, true);
+      await edit('✅ <b>Yuborildi</b>');
+      return dm(c.uid, '🎁 Tabriklaymiz! Sizga <b>' + months(c.months) + ' Telegram Premium</b> sovgʻa qilindi. Rahmat! 🃏');
+    } catch (e) {
+      // pul yetmasa yoki boshqa xato — soʻrov kutishda qoladi, egasi qayta bosishi mumkin
+      console.warn('[bot] Premium yuborilmadi:', e.message);
+      return send(q.message ? q.message.chat.id : Number(ownerOf()), '⚠️ Premium yuborilmadi: ' + esc(e.message) +
+        '\nBotning Stars hisobini toʻldirib, «✅ Yuborish»ni qayta bosing yoki rad eting.').catch(function () {});
+    }
+  }
+
+  // Har soatda: tasdiqlashga tayyor guruhlarning aʼzolar sonini tekshirish
+  async function checkGroups() {
+    if (!hub.referral) return;
+    const ids = hub.referral.groupsToCheck().slice(0, 30);
+    for (const id of ids) {
+      try { hub.referral.groupMembers(id, await api.call('getChatMemberCount', { chat_id: Number(id) })); }
+      catch (e) { if (e.code === 400 || e.code === 403) { const g = st().groups[id]; if (g) g.on = false; } }
+    }
+  }
+  bot.checkGroups = checkGroups;
 
   // ---------- faqat bot egasi uchun statistika ----------
   function ownerOf() {
@@ -345,6 +445,11 @@ function createBot(opts) {
     }
     const off = R.groupList.filter(function (g) { return !g.on; });
     if (off.length) L.push('', '🚫 Chiqarilgan: ' + off.map(function (g) { return esc(g.t || ('ID ' + g.id)); }).join(', '));
+    if (hub.referral) {
+      const Q = hub.referral.summary();
+      L.push('', '🎁 <b>Taklif dasturi:</b> ' + Q.invited + ' kishi havola orqali keldi (tasdiqlangan: ' + Q.okFriends + ') · guruh qoʻshganlar: ' + Q.groupsBy + ' (tasdiqlangan: ' + Q.okGroups + ')' +
+        (Q.pending ? ' · ⏳ kutilayotgan soʻrov: ' + Q.pending : '') + (Q.sent ? ' · yuborilgan Premium: ' + Q.sent : ''));
+    }
     if (R.top.length) {
       L.push('', '🏆 <b>Eng koʻp oʻynaganlar</b>');
       R.top.forEach(function (u, i) { L.push((i + 1) + '. ' + esc(u.name) + ' — ' + u.rounds + ' raund, ' + u.playH + ' soat'); });
@@ -378,6 +483,8 @@ function createBot(opts) {
       if (now === 'member' || now === 'administrator') st().group(cm.chat, true);
       else if (now === 'left' || now === 'kicked') st().group(cm.chat, false);
     }
+    if ((now === 'member' || now === 'administrator') && (was === 'left' || was === 'kicked') && cm.chat.type !== 'channel' &&
+        cm.chat.type !== 'private' && hub.referral && cm.from && !cm.from.is_bot) hub.referral.groupAdded(cm.chat, cm.from.id);
     if ((now === 'member' || now === 'administrator') && (was === 'left' || was === 'kicked') && cm.chat.type !== 'channel') {
       return send(cm.chat.id, 'Salom! 🃏 Men Bura oʻyini botiman.\nOʻyin zalini ochish uchun /bura yozing — tugmani bosib, stol tanlaysiz. 4 kishi yigʻilsa, oʻyin boshlanadi.');
     }
@@ -393,6 +500,8 @@ function createBot(opts) {
       }
     }
     console.log('[bot] @' + me.username + ' ishga tushdi');
+    const gt = setInterval(function () { checkGroups().catch(function () {}); }, 3600 * 1000);
+    if (gt.unref) gt.unref();
     api.call('setMyCommands', { commands: COMMANDS }).catch(function (e) { console.warn('[bot]', e.message); });
     if (ownerOf()) api.call('setMyCommands', { commands: COMMANDS.concat([{ command: 'statistika', description: 'Bot statistikasi (faqat siz)' }]),
       scope: { type: 'chat', chat_id: Number(ownerOf()) } }).catch(function () {});

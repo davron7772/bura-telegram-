@@ -520,10 +520,12 @@ P.fixHost = function () {
       const vsBot = function (k) { // raqib tomonda birorta ham odam yoʻq
         return self.seats.every(function (o, j) { return !o || E.teamOf(j) === E.teamOf(k) || o.bot; });
       };
+      const ids = this.seats.filter(function (o) { return o && !o.bot; }).map(function (o) { return o.id; });
       for (let k = 0; k < this.size; k++) {
         const s = this.seats[k];
         if (!s || s.bot) continue;
-        this.stats.round(s, { won: E.teamOf(k) === r.team, draw: draw, points: E.seatPoints(this.game, k), n: this.size, vsBot: vsBot(k) });
+        this.stats.round(s, { won: E.teamOf(k) === r.team, draw: draw, points: E.seatPoints(this.game, k), n: this.size,
+          vsBot: vsBot(k), vsHuman: !vsBot(k), ids: ids, chatId: this.groupKey ? this.chatId : null });
       }
     }
     this.phase = 'roundEnd';

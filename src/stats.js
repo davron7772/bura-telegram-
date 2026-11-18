@@ -46,7 +46,9 @@ function Stats(opts) {
   this.users = new Map();
   this.daily = {};   // 'YYYY-MM-DD' (Toshkent) -> { u: [id...], v, r, ms }
   this.groups = {};  // chatId -> { t: nom, a: qoʻshilgan, s: oxirgi faollik, on }
-  this.owner = '';   // /statistika koʻra oladigan yagona foydalanuvchi
+  this.owner = '';
+  this.claims = [];  // Premium soʻrovlari (referral.js)
+  this.ref = null;   // Referral (server.js ulaydi)   // /statistika koʻra oladigan yagona foydalanuvchi
   this.timer = null;
   this.remote = opts.remote || null;   // Yandex Disk (read/write)
   this.remoteMs = opts.remoteMs || 30000;
@@ -67,10 +69,11 @@ P.load = function () {
   if (data && data.daily && typeof data.daily === 'object') this.daily = data.daily;
   if (data && data.groups && typeof data.groups === 'object') this.groups = data.groups;
   if (data && data.owner) this.owner = String(data.owner);
+  if (data && Array.isArray(data.claims)) this.claims = data.claims;
 };
 
 P.serialize = function () {
-  return JSON.stringify({ v: 2, owner: this.owner, users: Array.from(this.users.values()), daily: this.daily, groups: this.groups });
+  return JSON.stringify({ v: 2, owner: this.owner, users: Array.from(this.users.values()), daily: this.daily, groups: this.groups, claims: this.claims });
 };
 
 // Masofadagi fayldan yuklash: koʻproq oʻynalgan yozuv ustun
@@ -276,6 +279,7 @@ P.round = function (who, o) {
   else if (o.won) u.wins++;
   u.points += o.points || 0;
   u.fair += 120 / (o.n || 4); // oʻrtacha ulush (4 kishida 30, 2 kishida 60)
+  if (this.ref) this.ref.round(u, o);
   this.save();
 };
 
