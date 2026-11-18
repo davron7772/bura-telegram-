@@ -269,13 +269,38 @@ P.move = function (who, verdict, auto) {
 P.round = function (who, o) {
   if (!who || who.bot) return;
   const u = this.user(who);
+  if (u.xp == null) u.xp = u.rounds; // eski yozuvlar: hammasi odamlar bilan deb olinadi
   u.rounds++;
+  u.xp += o.vsBot ? 0.5 : 1;          // faqat botlarga qarshi raund — yarim tajriba
   if (o.draw) u.draws++;
   else if (o.won) u.wins++;
   u.points += o.points || 0;
   u.fair += 120 / (o.n || 4); // oʻrtacha ulush (4 kishida 30, 2 kishida 60)
   this.save();
 };
+
+// ---------- reyting ----------
+// Mahorat (0–100): toʻgʻri yurishlar 50% + yutish 30% + olingan ochko 20%.
+// Kam oʻynaganning natijasi tasodifiy boʻlishi mumkin, shuning uchun u oʻrtacha
+// darajaga (50) tortiladi: PRIOR_ROUNDS raund oʻynagandagina oʻz natijasi yarim kuchga kiradi.
+// Tajriba: har raund ball qoʻshadi (botlarga qarshi — yarmi), lekin oʻsishi sekinlashadi.
+// Reyting = mahorat × 10 + tajriba.
+const PRIOR_ROUNDS = 20, PRIOR = 50;
+function rawSkill(u) {
+  const q = u.moves ? u.good / u.moves : 0.5;
+  const win = u.rounds ? (u.wins + u.draws * 0.5) / u.rounds : 0.5;
+  const pts = u.fair ? Math.min(1, (u.points / u.fair) * 0.5) : 0.5;
+  return (q * 0.5 + win * 0.3 + pts * 0.2) * 100;
+}
+function skillOf(u) {
+  const n = u.rounds || 0;
+  return (rawSkill(u) * n + PRIOR * PRIOR_ROUNDS) / (n + PRIOR_ROUNDS);
+}
+function xpOf(u) {
+  const r = u.xp != null ? u.xp : (u.rounds || 0);
+  return Math.round(150 * Math.log(1 + r / 10));
+}
+function ratingOf(u) { return Math.round(skillOf(u) * 10) + xpOf(u); }
 
 function effOf(u) {
   const q = u.moves ? u.good / u.moves : 0;
@@ -291,6 +316,9 @@ P.view = function (u) {
     photo: u.photo || '',
     rounds: u.rounds,
     eff: effOf(u),
+    skill: Math.round(skillOf(u)),
+    xp: xpOf(u),
+    rating: ratingOf(u),
     acc: u.moves ? Math.round((u.good / u.moves) * 100) : 0,
     win: u.rounds ? Math.round(((u.wins + u.draws * 0.5) / u.rounds) * 100) : 0,
     avg: u.rounds ? Math.round(u.points / u.rounds) : 0,
@@ -307,7 +335,7 @@ P.list = function (limit) {
   const all = Array.from(this.users.values()).filter(function (u) { return u.rounds > 0 || u.moves > 0; }).map(this.view, this);
   all.sort(function (a, b) {
     if (a.ranked !== b.ranked) return a.ranked ? -1 : 1;
-    return b.eff - a.eff || b.rounds - a.rounds;
+    return b.rating - a.rating || b.rounds - a.rounds;
   });
   return all.slice(0, limit || 100);
 };
@@ -317,7 +345,7 @@ P.me = function (id) {
   return u ? this.view(u) : null;
 };
 
-module.exports = { Stats: Stats, judge: judge, effOf: effOf, MIN_ROUNDS: MIN_ROUNDS };
+module.exports = { Stats: Stats, judge: judge, effOf: effOf, skillOf: skillOf, xpOf: xpOf, ratingOf: ratingOf, MIN_ROUNDS: MIN_ROUNDS };
 
 // Xona uchun: yurishni tahlil qilib yozish
 Stats.prototype.check = function (st, seat, a, auto, who) {

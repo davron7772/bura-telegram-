@@ -665,7 +665,7 @@
     else html += '<p class="hall-hint">Istalgan stoldagi boʻsh oʻringa bosing — oʻsha jamoaga oʻtirasiz. Oʻyin ketayotgan stolni kuzatishingiz mumkin.</p>';
     html += '<div class="tables">' + sorted.map(hallCard).join('') + '</div>';
     html += '<div class="hall-actions">' + btn('hnew', '+ Yangi stol ochish', list.length ? 'secondary wide' : 'primary wide', S.busy) +
-      (DEMO ? '' : '<button type="button" class="effbtn" data-act="stats"><span class="effico" aria-hidden="true">%</span><span><b>Oʻyinchilar samaradorligi</b><small>Hamma oʻyinchilarning oʻyin tahlili</small></span></button>') + '</div>';
+      (DEMO ? '' : '<button type="button" class="effbtn" data-act="stats"><span class="effico" aria-hidden="true">★</span><span><b>Oʻyinchilar reytingi</b><small>Mahorat va tajriba boʻyicha</small></span></button>') + '</div>';
     if (inRoom && !DEMO) html += '<div class="hall-set">' + skinToggle() + '</div>';
     if (inRoom) html += readyBarHTML(S.room);
     return html + '</div>';
@@ -1315,7 +1315,7 @@
     if (r.isHost && r.phase === 'roundEnd') h += btn('lobby', 'Lobbiga qaytish (yangi match)', 'secondary');
     if (!DEMO) h += btn('share', 'Doʻstlarni chaqirish', 'secondary');
     h += btn('rules', 'Qoidalar', 'secondary') + '</div>';
-    h += '<button type="button" class="effbtn" data-act="stats"><span class="effico" aria-hidden="true">%</span><span><b>Oʻyinchilar samaradorligi</b><small>Hamma oʻyinchilarning oʻyin tahlili</small></span></button>';
+    h += '<button type="button" class="effbtn" data-act="stats"><span class="effico" aria-hidden="true">★</span><span><b>Oʻyinchilar reytingi</b><small>Mahorat va tajriba boʻyicha</small></span></button>';
     h += viewToggle() + (DEMO ? '' : skinToggle());
     h += '<h2>Hisob</h2><p class="sub">' + (r.round ? r.round + '-raund. Raundda yutqazgan jamoaga ball yoziladi; ' + r.lose + ' ballga yetgan jamoa matchni boy beradi.' : 'Oʻyin hali boshlanmadi') + '</p>' + teamsHTML(r, null);
     const note = edgeNote(r);
@@ -1333,7 +1333,7 @@
   // Oʻyinchilar samaradorligi (server tahlili)
   function statsHTML() {
     const d = S.stats;
-    let h = '<h2>Oʻyinchilar samaradorligi</h2><p class="sub">Har bir yurish tahlil qilinadi. Samaradorlik = toʻgʻri yurishlar (50%) + olingan ochko (25%) + yutilgan raundlar (25%).</p>';
+    let h = '<h2>Oʻyinchilar reytingi</h2><p class="sub">Reyting = mahorat × 10 + tajriba. Mahorat — toʻgʻri yurishlar (50%), yutish (30%) va olingan ochko (20%); kam oʻynaganlarda u oʻrtacha darajaga yaqin turadi. Tajriba — har oʻynalgan raund uchun ball (botlarga qarshi — yarmi).</p>';
     if (!d) return h + '<p class="status">Yuklanmoqda…</p>';
     const T = d.total;
     if (T && T.players) {
@@ -1346,16 +1346,18 @@
         (since ? '<em>' + since.getDate() + '.' + String(since.getMonth() + 1).padStart(2, '0') + '.' + since.getFullYear() + ' dan beri</em>' : '') + '</div>';
     }
     const row = function (u, i) {
-      const lvl = u.eff >= 70 ? 'hi' : u.eff >= 50 ? 'mid' : 'lo';
+      const sk = u.skill != null ? u.skill : u.eff;
+      const lvl = sk >= 65 ? 'hi' : sk >= 50 ? 'mid' : 'lo';
       return '<li class="eff-row' + (d.me && d.me.id === u.id ? ' me' : '') + (u.ranked ? '' : ' new') + '">' +
         '<span class="eff-n">' + (u.ranked ? i + 1 : '·') + '</span>' +
         '<span class="eff-who"><b>' + esc(u.name) + (d.me && d.me.id === u.id ? ' <i>(siz)</i>' : '') + '</b>' +
-        '<small>' + u.rounds + ' raund · toʻgʻri yurish ' + u.acc + '% · yutish ' + u.win + '% · oʻrtacha ' + u.avg + ' ochko</small>' +
+        '<small>' + 'mahorat ' + sk + '% · tajriba +' + (u.xp || 0) + ' · ' + u.rounds + ' raund</small>' +
+        '<small>' + 'toʻgʻri yurish ' + u.acc + '% · yutish ' + u.win + '% · oʻrtacha ' + u.avg + ' ochko</small>' +
         (u.visits ? '<small>' + u.visits + ' marta kirgan · ' + u.days + ' kun · ' + u.playH + ' soat oʻynagan</small>' : '') +
-        '<span class="eff-bar"><span class="' + lvl + '" style="width:' + u.eff + '%"></span></span></span>' +
-        '<span class="eff-p ' + lvl + '">' + (u.ranked ? u.eff + '%' : '—') + '</span></li>';
+        '<span class="eff-bar"><span class="' + lvl + '" style="width:' + sk + '%"></span></span></span>' +
+        '<span class="eff-p ' + lvl + '">' + (u.ranked ? (u.rating != null ? u.rating + '<small>ball</small>' : u.eff + '%') : '—') + '</span></li>';
     };
-    if (d.me) h += '<div class="eff-me"><span>Sizning samaradorligingiz</span><b>' + (d.me.ranked ? d.me.eff + '%' : '—') + '</b>' +
+    if (d.me) h += '<div class="eff-me"><span>Sizning reytingingiz</span><b>' + (d.me.ranked ? (d.me.rating != null ? d.me.rating + ' ball' : d.me.eff + '%') : '—') + '</b>' +
       (d.me.ranked ? '' : '<small>Reytingga kirish uchun kamida ' + d.min + ' raund oʻynang</small>') + '</div>';
     if (!d.list.length) return h + '<p class="status">Hali statistika yoʻq — bir necha raund oʻynang.</p>';
     let n = 0;

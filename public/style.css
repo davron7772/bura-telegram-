@@ -760,6 +760,7 @@ button.hs:focus-visible { outline: 2px solid #fff; outline-offset: 2px; border-r
 .eff-bar .hi { background: #5fc27e; } .eff-bar .mid { background: var(--saffron); } .eff-bar .lo { background: #d9695c; }
 .eff-p { font: 800 18px var(--sans); min-width: 48px; text-align: right; }
 .eff-p.hi { color: #6fd28e; } .eff-p.mid { color: var(--saffron); } .eff-p.lo { color: #e5806f; }
+.eff-p small { display: block; font: 600 10px var(--sans); opacity: .7; letter-spacing: .04em; }
 .sheet .langrow { justify-content: flex-start; padding-right: 56px; }
 
 /* Oʻyinchi oldidagi narsa (viski, sigara, tort, pivo) */

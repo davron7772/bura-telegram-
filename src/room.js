@@ -516,10 +516,14 @@ P.fixHost = function () {
       this.matchWins[1 - matchLoser]++;
     }
     if (this.stats) {
+      const self = this;
+      const vsBot = function (k) { // raqib tomonda birorta ham odam yoʻq
+        return self.seats.every(function (o, j) { return !o || E.teamOf(j) === E.teamOf(k) || o.bot; });
+      };
       for (let k = 0; k < this.size; k++) {
         const s = this.seats[k];
         if (!s || s.bot) continue;
-        this.stats.round(s, { won: E.teamOf(k) === r.team, draw: draw, points: E.seatPoints(this.game, k), n: this.size });
+        this.stats.round(s, { won: E.teamOf(k) === r.team, draw: draw, points: E.seatPoints(this.game, k), n: this.size, vsBot: vsBot(k) });
       }
     }
     this.phase = 'roundEnd';
