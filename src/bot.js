@@ -289,6 +289,7 @@ function createBot(opts) {
     if (cmd === 'qoidalar' || cmd === 'rules') return send(msg.chat.id, RULES, thread);
     if (cmd === 'help' || cmd === 'yordam') return send(msg.chat.id, HELP, thread);
     if ((cmd === 'statistika' || cmd === 'stat') && isPrivate) return ownerStats(msg);
+    if (cmd === 'elon' && isPrivate) return broadcastAsk(msg, m[3] || '');
   }
 
   // ---------- doʻst/guruh dasturi: xabarlar va Premium tasdiqlash ----------
@@ -338,7 +339,66 @@ function createBot(opts) {
       .catch(function (e) { console.warn('[bot] egasiga xabar:', e.message); });
   }
 
+  // ---------- e'lon: faqat egasi, tasdiqlagandan keyin hamma oʻyinchi va guruhlarga ----------
+  const casts = new Map(); // id -> { text, at }
+  function playButton() {
+    return { inline_keyboard: [[{ text: '🎮 Oʻyinni ochish', url: bot.appLink('') }]] };
+  }
+  function recipients() {
+    const S = st(), users = [], groups = [];
+    if (!S) return { users: users, groups: groups };
+    for (const u of S.users.values()) { const n = /^tg:(\d+)$/.exec(u.id); if (n) users.push(Number(n[1])); }
+    Object.keys(S.groups).forEach(function (id) { if (S.groups[id].on) groups.push(Number(id)); });
+    return { users: users, groups: groups };
+  }
+  async function broadcastAsk(msg, text) {
+    if (String(msg.from && msg.from.id) !== ownerOf()) return;
+    text = String(text || '').trim();
+    if (!text) return send(msg.chat.id, 'E\'lon matnini buyruqdan keyin yozing:\n<code>/elon Matn…</code>\n\nAvval sizga koʻrinishi chiqadi, «Yuborish»ni bosgandan keyingina hammaga ketadi.');
+    const id = Date.now().toString(36);
+    casts.set(id, { text: text.slice(0, 3500), at: Date.now() });
+    const R = recipients();
+    await api.call('sendMessage', { chat_id: msg.chat.id, text: text, reply_markup: playButton(), disable_web_page_preview: true });
+    return send(msg.chat.id, '👆 E\'lon shunday koʻrinadi.\nKimga: <b>' + R.users.length + '</b> oʻyinchi (botni ochganlar oladi) va <b>' + R.groups.length + '</b> guruh.',
+      { reply_markup: { inline_keyboard: [[{ text: '✅ Hammaga yuborish', callback_data: 'bc:' + id + ':y' }, { text: '✖️ Bekor qilish', callback_data: 'bc:' + id + ':n' }]] } });
+  }
+  async function broadcastRun(id, chatId) {
+    const c = casts.get(id);
+    casts.delete(id);
+    if (!c) return send(chatId, 'Bu e\'lon eskirgan — /elon bilan qayta yuboring.');
+    const R = recipients(), S = st();
+    const res = { u: 0, uf: 0, g: 0, gf: 0 };
+    const one = async function (chat) {
+      for (let k = 0; k < 2; k++) {
+        try { await api.call('sendMessage', { chat_id: chat, text: c.text, reply_markup: playButton(), disable_web_page_preview: true }); return true; }
+        catch (e) {
+          if (e.code === 429) { await sleep(((e.retryAfter || 3) + 1) * 1000); continue; }
+          if (chat < 0 && (e.code === 403 || e.code === 400) && S && S.groups[String(chat)]) S.groups[String(chat)].on = false;
+          return false;
+        }
+      }
+      return false;
+    };
+    await send(chatId, '⏳ Yuborilmoqda…');
+    for (const g of R.groups) { if (await one(g)) res.g++; else res.gf++; await sleep(80); }
+    for (const u of R.users) { if (await one(u)) res.u++; else res.uf++; await sleep(60); }
+    if (S) S.save();
+    console.log('[bot] e\'lon: oʻyinchi ' + res.u + '/' + (res.u + res.uf) + ', guruh ' + res.g + '/' + (res.g + res.gf));
+    return send(chatId, '✅ E\'lon yuborildi.\n👤 Oʻyinchilar: ' + res.u + ' ta oldi' + (res.uf ? ' (' + res.uf + ' tasi botni ochmagan yoki bloklagan)' : '') +
+      '\n👥 Guruhlar: ' + res.g + ' ta' + (res.gf ? ' (' + res.gf + ' tasiga yetmadi)' : ''));
+  }
+
   async function onCallback(q) {
+    const b = /^bc:([a-z0-9]+):([yn])$/.exec(q.data || '');
+    if (b) {
+      const ans = function (t) { return api.call('answerCallbackQuery', { callback_query_id: q.id, text: t || '' }).catch(function () {}); };
+      if (String(q.from && q.from.id) !== ownerOf()) return ans('Faqat bot egasi uchun');
+      const chat = q.message ? q.message.chat.id : Number(ownerOf());
+      if (q.message) api.call('editMessageReplyMarkup', { chat_id: chat, message_id: q.message.message_id, reply_markup: { inline_keyboard: [] } }).catch(function () {});
+      if (b[2] === 'n') { casts.delete(b[1]); await ans('Bekor qilindi'); return send(chat, 'E\'lon bekor qilindi.'); }
+      await ans('Yuborilmoqda');
+      return broadcastRun(b[1], chat);
+    }
     const m = /^pg:([a-z0-9]+):([yn])$/.exec(q.data || '');
     const answer = function (text) { return api.call('answerCallbackQuery', { callback_query_id: q.id, text: text || '' }).catch(function () {}); };
     if (!m || !hub.referral) return answer();
