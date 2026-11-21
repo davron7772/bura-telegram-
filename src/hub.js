@@ -291,7 +291,8 @@ class Hub {
     let user = null, startParam = '';
     const auth = this.cfg.botToken ? validateInitData(String(m.initData || ''), this.cfg.botToken) : null;
     if (auth) {
-      user = { id: 'tg:' + auth.user.id, name: displayName(auth.user), photo: safePhoto(auth.user.photo_url) };
+      user = { id: 'tg:' + auth.user.id, name: displayName(auth.user), photo: safePhoto(auth.user.photo_url),
+        username: typeof auth.user.username === 'string' ? auth.user.username.slice(0, 40) : '' };
       startParam = auth.startParam;
     } else if (this.cfg.devMode && m.dev && m.dev.id) {
       user = { id: 'dev:' + String(m.dev.id).slice(0, 32), name: displayName({ first_name: String(m.dev.name || 'Mehmon') }), photo: null };

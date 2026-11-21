@@ -525,7 +525,8 @@ P.fixHost = function () {
         const s = this.seats[k];
         if (!s || s.bot) continue;
         this.stats.round(s, { won: E.teamOf(k) === r.team, draw: draw, points: E.seatPoints(this.game, k), n: this.size,
-          vsBot: vsBot(k), vsHuman: !vsBot(k), ids: ids, chatId: this.groupKey ? this.chatId : null });
+          vsBot: vsBot(k), vsHuman: !vsBot(k), ids: ids, chatId: this.groupKey ? this.chatId : null,
+          rtype: r.type, award: E.teamOf(k) === r.team || draw ? 0 : base, aceSeat: aces ? r.seat === k : false });
       }
     }
     this.phase = 'roundEnd';

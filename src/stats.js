@@ -147,6 +147,7 @@ P.user = function (who) {
   }
   if (who.name) u.name = String(who.name).slice(0, 64);
   if (who.photo) u.photo = String(who.photo).slice(0, 512);
+  if (who.username) u.un = String(who.username).slice(0, 40);
   u.at = this.now();
   return u;
 };
@@ -280,6 +281,7 @@ P.round = function (who, o) {
   u.points += o.points || 0;
   u.fair += 120 / (o.n || 4); // oʻrtacha ulush (4 kishida 30, 2 kishida 60)
   if (this.ref) this.ref.round(u, o);
+  analyzeRound(u, o);
   this.save();
 };
 
@@ -355,4 +357,71 @@ module.exports = { Stats: Stats, judge: judge, effOf: effOf, skillOf: skillOf, x
 Stats.prototype.check = function (st, seat, a, auto, who) {
   if (!who || who.bot) return;
   this.move(who, judge(st, seat, a, auto), auto);
+  if (st && a && !auto) { try { analyze(this.user(who), st, seat, a); } catch (e) { /* tahlil ixtiyoriy */ } }
+};
+
+// ---------- batafsil oʻyin tahlili (har bir yurish turi boʻyicha hisoblagichlar) ----------
+function inc(an, k, v) { an[k] = (an[k] || 0) + (v == null ? 1 : v); }
+function analyze(u, st, seat, a) {
+  const an = u.an || (u.an = {});
+  const cards = a.cards || [];
+  const tr = st.trump;
+  const trumps = cards.filter(function (c) { return E.suitOf(c) === tr; }).length;
+  const pts = E.sumPoints(cards);
+  const hand = (st.hands && st.hands[seat]) || [];
+  if (a.type === 'lead') {
+    inc(an, 'lead');
+    if (cards.length > 1) inc(an, 'leadMulti');
+    if (trumps) inc(an, 'leadTrump');
+    if (cards.some(function (c) { return E.rankOf(c) === 'A' || E.rankOf(c) === '10'; })) inc(an, 'leadHigh');
+    return;
+  }
+  const t = st.trick;
+  if (!t || !t.plays || !t.plays.length) return;
+  const best = t.plays[t.best];
+  const partner = E.teamOf(best.seat) === E.teamOf(seat) && best.seat !== seat;
+  let stake = 0;
+  t.plays.forEach(function (p) { stake += E.sumPoints(p.cards); });
+  if (a.type === 'beat') {
+    if (partner) { inc(an, 'beatPartner'); if (trumps) inc(an, 'beatPartnerTrump'); return; }
+    inc(an, 'beatOpp'); inc(an, 'takenPts', stake + pts);
+    if (trumps) {
+      inc(an, 'beatTrump');
+      const plain = hand.filter(function (c) { return E.suitOf(c) !== tr; });
+      if (E.canBeatWith(plain, best.cards, tr)) inc(an, 'trumpWaste'); // koʻzirsiz ham urish mumkin edi
+      else if (stake + pts < 10 && trumps === cards.length && cards.some(function (c) { return E.rankOf(c) === 'A' || E.rankOf(c) === '10'; })) inc(an, 'cheapBigTrump');
+    }
+    return;
+  }
+  if (a.type === 'discard') {
+    if (partner) { inc(an, 'discPartner'); inc(an, 'fedPts', pts); return; }
+    inc(an, 'discOpp'); inc(an, 'gavePts', pts);
+    const could = E.canBeatWith(hand, best.cards, tr);
+    if (could && stake + pts >= 10) inc(an, 'missedTake');
+    if (pts >= 10) { inc(an, 'gaveHigh'); if (could) inc(an, 'gaveHighAvoidable'); }
+  }
+}
+
+// Raund natijasi boʻyicha tahlil
+function analyzeRound(u, o) {
+  const an = u.an || (u.an = {});
+  const m = o.n === 2 ? '2' : '4';
+  inc(an, 'r' + m); if (o.won && !o.draw) inc(an, 'w' + m);
+  if (o.vsBot) { inc(an, 'rBot'); if (o.won && !o.draw) inc(an, 'wBot'); }
+  else { inc(an, 'rHum'); if (o.won && !o.draw) inc(an, 'wHum'); }
+  if (o.award === 6) inc(an, 'dry');          // quruq qoldi (birorta karta olmadi)
+  if (o.award === 4) inc(an, 'lostBig');      // 31 dan kam ochko bilan yutqazdi
+  if (o.aceSeat) inc(an, 'aces');
+  inc(an, 'pts' + m, o.points || 0);
+}
+Stats.prototype.findUser = function (q) {
+  q = String(q || '').trim().replace(/^@/, '').toLowerCase();
+  if (!q) return null;
+  let hit = null;
+  for (const u of this.users.values()) {
+    if (u.un && u.un.toLowerCase() === q) return u;
+    if (u.id === 'tg:' + q) return u;
+    if (!hit && u.name && u.name.toLowerCase().indexOf(q) >= 0) hit = u;
+  }
+  return hit;
 };

@@ -290,6 +290,7 @@ function createBot(opts) {
     if (cmd === 'help' || cmd === 'yordam') return send(msg.chat.id, HELP, thread);
     if ((cmd === 'statistika' || cmd === 'stat') && isPrivate) return ownerStats(msg);
     if (cmd === 'elon' && isPrivate) return broadcastAsk(msg, m[3] || '');
+    if (cmd === 'tahlil' && isPrivate) return playerReport(msg, m[3] || '');
   }
 
   // ---------- doʻst/guruh dasturi: xabarlar va Premium tasdiqlash ----------
@@ -442,6 +443,18 @@ function createBot(opts) {
   }
   bot.checkGroups = checkGroups;
 
+  // ---------- /tahlil @username — oʻyinchi tahlili (faqat egasi) ----------
+  function playerReport(msg, q) {
+    if (String(msg.from && msg.from.id) !== ownerOf()) return;
+    const S = st();
+    if (!S || !S.findUser) return;
+    q = String(q || '').trim();
+    if (!q) return send(msg.chat.id, 'Kimni tahlil qilay? Masalan:\n<code>/tahlil @username</code> yoki <code>/tahlil Ism</code>');
+    const u = S.findUser(q);
+    if (!u) return send(msg.chat.id, '«' + esc(q) + '» topilmadi. Username faqat oʻyinchi ilovani yangidan ochganda yoziladi — hozircha ismi bilan qidirib koʻring.');
+    return send(msg.chat.id, require('./report').report(S, u));
+  }
+
   // ---------- faqat bot egasi uchun statistika ----------
   function ownerOf() {
     if (cfg.ownerId) return String(cfg.ownerId);
@@ -476,7 +489,7 @@ function createBot(opts) {
       S.owner = uid; S.save(); if (S.flush) S.flush();
       console.log('[bot] /statistika egasi belgilandi: ' + uid);
       note = '🔐 Siz bot egasi sifatida belgilandingiz — bu buyruq endi faqat sizga ishlaydi.\n\n';
-      api.call('setMyCommands', { commands: COMMANDS.concat([{ command: 'statistika', description: 'Bot statistikasi (faqat siz)' }]),
+      api.call('setMyCommands', { commands: COMMANDS.concat([{ command: 'statistika', description: 'Bot statistikasi (faqat siz)' }, { command: 'tahlil', description: 'Oʻyinchi tahlili (faqat siz)' }, { command: 'elon', description: 'Hammaga eʼlon (faqat siz)' }]),
         scope: { type: 'chat', chat_id: Number(uid) } }).catch(function () {});
     }
     if (ownerOf() !== uid) return; // boshqalarga hech narsa javob bermaymiz
@@ -563,7 +576,7 @@ function createBot(opts) {
     const gt = setInterval(function () { checkGroups().catch(function () {}); }, 3600 * 1000);
     if (gt.unref) gt.unref();
     api.call('setMyCommands', { commands: COMMANDS }).catch(function (e) { console.warn('[bot]', e.message); });
-    if (ownerOf()) api.call('setMyCommands', { commands: COMMANDS.concat([{ command: 'statistika', description: 'Bot statistikasi (faqat siz)' }]),
+    if (ownerOf()) api.call('setMyCommands', { commands: COMMANDS.concat([{ command: 'statistika', description: 'Bot statistikasi (faqat siz)' }, { command: 'tahlil', description: 'Oʻyinchi tahlili (faqat siz)' }, { command: 'elon', description: 'Hammaga eʼlon (faqat siz)' }]),
       scope: { type: 'chat', chat_id: Number(ownerOf()) } }).catch(function () {});
     if (/^https:\/\//.test(cfg.publicUrl)) {
       api.call('setChatMenuButton', { menu_button: { type: 'web_app', text: 'Bura', web_app: { url: cfg.publicUrl + '/' } } })
