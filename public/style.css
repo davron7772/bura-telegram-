@@ -765,7 +765,8 @@ button.hs:focus-visible { outline: 2px solid #fff; outline-offset: 2px; border-r
 
 /* Oʻyinchi oldidagi narsa (viski, sigara, tort, pivo) */
 .ava .itm { position: absolute; right: -26px; bottom: -12px; width: 40px; height: 40px; z-index: 3; pointer-events: none; filter: drop-shadow(0 3px 4px rgba(0, 0, 0, .5)) drop-shadow(0 0 1px rgba(0, 0, 0, .4)); animation: itm-in .35s cubic-bezier(.2, .9, .3, 1.3) both; }
-.ava .itm svg { width: 100%; height: 100%; }
+.ava .itm svg, .ava .itm img { width: 100%; height: 100%; display: block; object-fit: contain; }
+.ava .itm img { width: 118%; height: 118%; margin: -9%; }
 @keyframes itm-in { from { transform: scale(.3) translateY(8px); opacity: 0; } }
 .itm-cigar .smoke { animation: smoke 3.2s ease-in-out infinite; transform-origin: 40px 20px; }
 @keyframes smoke { 0%, 100% { opacity: .2; transform: translateY(2px); } 50% { opacity: .75; transform: translateY(-2px); } }
@@ -782,10 +783,11 @@ button.hs:focus-visible { outline: 2px solid #fff; outline-offset: 2px; border-r
   background: var(--saffron); color: #2a1a05; font: 800 14px/1 var(--sans); font-style: normal; box-shadow: 0 0 0 2px var(--indigo), 0 2px 4px rgba(0, 0, 0, .4); }
 .mebar .mewho b { margin-left: 4px; }
 /* tanlash oynasi */
-.items { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 10px 0 16px; }
-.item { display: flex; flex-direction: column; align-items: center; gap: 6px; min-height: 110px; padding: 12px 8px; border: 0; border-radius: 16px; background: rgba(247, 236, 223, .06); box-shadow: inset 0 0 0 1.5px rgba(247, 236, 223, .16); color: var(--text); font: inherit; cursor: pointer; }
+.items { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 10px 0 16px; }
+.item { display: flex; flex-direction: column; align-items: center; gap: 4px; min-height: 100px; padding: 10px 6px; border: 0; border-radius: 16px; background: rgba(247, 236, 223, .06); box-shadow: inset 0 0 0 1.5px rgba(247, 236, 223, .16); color: var(--text); font: inherit; cursor: pointer; }
 .item .ipic { width: 64px; height: 64px; filter: drop-shadow(0 4px 6px rgba(0, 0, 0, .45)); }
-.item .ipic svg { width: 100%; height: 100%; }
+.item .ipic svg, .item .ipic img { width: 100%; height: 100%; display: block; object-fit: contain; }
+.item b { font-size: 15px; }
 .item b { font-size: 16px; }
 .item.on { background: rgba(240, 180, 60, .16); box-shadow: inset 0 0 0 2px var(--saffron); }
 .item:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }

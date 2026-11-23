@@ -126,7 +126,7 @@
   };
 
   // Oʻyinchi oʻz oldiga qoʻyadigan narsa (poker stolidagidek): viski, sigara, tort, pivo
-const ITEMS = ['whisky', 'cigar', 'cake', 'beer'];
+const ITEMS = ['whisky', 'cigar', 'cake', 'beer', 'choy', 'osh', 'non', 'anor', 'qovun', 'qahva', 'atirgul', 'kubok', 'toj', 'olmos'];
 P.setItem = function (uid, item) {
   const i = this.seatOf(uid);
   if (i < 0) return 'Avval stolga oʻtiring';
