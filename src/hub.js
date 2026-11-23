@@ -4,6 +4,7 @@ const { Referral } = require('./referral');
 const crypto = require('crypto');
 const { WebSocketServer } = require('ws');
 const { Room } = require('./room');
+const THROW_GAP_MS = 2000;
 const { validateInitData } = require('./auth');
 const { displayName, safePhoto } = require('./util');
 const { hasTurn } = require('./ice');
@@ -165,6 +166,17 @@ class Hub {
     this.onRoomChange(room, 'change');
   }
 
+  // Sovgʻa yoki hazil yuborish (stoldagi oʻyinchiga yoki hammaga)
+  throwItem(c, m) {
+    const now = Date.now();
+    if (c.lastThrow && now - c.lastThrow < THROW_GAP_MS) return this.send(c, { t: 'error', msg: 'Biroz kuting — juda tez yuboryapsiz' });
+    const res = c.room.throwItem(c.user.id, m.to, String(m.item || ''));
+    if (res.error) return this.send(c, { t: 'error', msg: res.error });
+    c.lastThrow = now;
+    const ev = { t: 'throw', from: res.from, to: res.to, targets: res.targets, item: res.item, kind: res.kind, name: res.name };
+    for (const o of this.conns.get(c.room.id) || []) this.send(o, ev);
+  }
+
   send(c, obj) {
     if (c.ws.readyState === 1) {
       try { c.ws.send(JSON.stringify(obj)); } catch (_) { /* yopilgan */ }
@@ -276,6 +288,7 @@ class Hub {
       return this.send(c, { t: 'error', msg: 'Stol topilmadi' });
     }
     switch (m.t) {
+      case 'throw': return this.throwItem(c, m);
       case 'rtc': return this.relay(c, m);
       case 'voice_join': return this.voiceJoin(c, m);
       case 'voice_leave': return this.voiceLeave(c);

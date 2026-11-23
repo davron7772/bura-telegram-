@@ -266,6 +266,7 @@
     }
     else if (m.t === 'welcome') { S.myRef = (m.me && m.me.ref) || ''; S.refOn = !!m.refOn; if (S.screen === 'hall') render(); }
     else if (m.t === 'ref') { S.ref = m; if (S.sheet && (S.sheet.type === 'ref' || S.sheet.type === 'refclaim')) render(); }
+    else if (m.t === 'throw') throwFx(m);
     else if (m.t === 'toast') { toast(m.msg, 4500); haptic('success'); }
     else if (m.t === 'stats') {
       S.stats = { list: m.list || [], me: m.me || null, min: m.min || 3, total: m.total || null };
@@ -468,11 +469,11 @@
   function avatarHTML(seat, s, active, plus) {
     const voice = VC && seat && !seat.bot;
     const it = seat && seat.item && ITEMS[seat.item] ? seat.item : null;
-    return '<div class="ava' + (it ? ' hasitm' : '') + '" style="--av:' + AVATAR_BG[s % AVATAR_BG.length] + '"' + (voice ? ' data-vs="' + s + '"' : '') + '><span>' + esc(firstLetter(seat && seat.name)) + '</span>' +
+    return '<div class="ava' + (it ? ' hasitm' : '') + '" data-sa="' + s + '" style="--av:' + AVATAR_BG[s % AVATAR_BG.length] + '"' + (voice ? ' data-vs="' + s + '"' : '') + '><span>' + esc(firstLetter(seat && seat.name)) + '</span>' +
       (seat && seat.photo ? '<img src="' + esc(seat.photo) + '" alt="" referrerpolicy="no-referrer">' : '') +
       (active ? '<i class="ring"></i>' : '') + (voice ? VBADGE : '') +
       (plus ? '<i class="plus" aria-hidden="true">+</i>' : '') +
-      (seat && seat.item && ITEMS[seat.item] ? '<i class="itm itm-' + seat.item + '" title="' + ITEMS[seat.item].name + '">' + ITEMS[seat.item].svg + '</i>' : '') + '</div>';
+      (seat && seat.item && ITEMS[seat.item] ? '<i class="itm itm-' + seat.item + '" title="' + ITEMS[seat.item].name + (seat.gift ? ' — ' + esc(seat.gift) + ' sovgʻasi' : '') + '">' + ITEMS[seat.item].svg + '</i>' : '') + '</div>';
   }
 
   // Oʻyinchi oʻz oldiga qoʻyadigan narsalar (poker stolidagidek)
@@ -480,7 +481,9 @@
   const ITEM_LIST = [['choy', 'Choy'], ['osh', 'Osh'], ['non', 'Non'], ['anor', 'Anor'], ['qovun', 'Qovun'], ['qahva', 'Qahva'],
     ['cake', 'Tort'], ['atirgul', 'Atirgul'], ['kubok', 'Kubok'], ['toj', 'Toj'], ['olmos', 'Olmos'],
     ['whisky', 'Viski'], ['beer', 'Pivo'], ['cigar', 'Sigara']];
+  const JOKE_LIST = [['maymun', 'Maymun'], ['kloun', 'Kloun'], ['pomidor', 'Pomidor'], ['tuxum', 'Tuxum'], ['eshak', 'Eshak'], ['tovuq', 'Qoʻrqoq'], ['sorgich', 'Soʻrgʻich'], ['toshbaqa', 'Toshbaqa']];
   const ITEMS = {};
+  function itemImg(k) { return '<img src="/items/' + k + '.webp?v=1" alt="" draggable="false" decoding="async">'; }
   ITEM_LIST.forEach(function (x) {
     ITEMS[x[0]] = { name: x[1], svg: '<img src="/items/' + x[0] + '.webp?v=1" alt="" draggable="false" decoding="async">' };
   });
@@ -833,7 +836,7 @@
     const g = r.game, seat = r.seats[s];
     const active = r.phase === 'playing' && isActor(g, s);
     const partner = r.myTeam >= 0 && s % 2 === r.myTeam;
-    const tap = seat.bot || seat.auto || (r.isHost && !seat.you); // botni bosib — chiqarish; stol egasi — istalgan oʻyinchini
+    const tap = !seat.you; // bosib — sovgʻa/hazil yuborish; bot va (stol egasi uchun) oʻyinchini chiqarish
     return '<div class="opp' + (active ? ' turn' : '') + (seat.online ? '' : ' off') + (partner ? ' partner' : '') + '">' +
       (tap ? '<button type="button" class="seat-tap" data-act="seatmenu" data-seat="' + s + '" aria-label="' + esc(seat.name) + ': bosing">' + avatarHTML(seat, s, active) + '</button>' : avatarHTML(seat, s, active)) +
       '<div class="nm">' + (seat.bot || seat.auto ? '<svg class="bi" aria-label="bot"><use href="#i-bot"/></svg>' : '') + '<span>' + esc(seat.name) + '</span></div>' +
@@ -1267,17 +1270,75 @@
       if (!DEMO && r.mySeat >= 0) b += btn('invite-mates', iconSvg('i-users') + 'Boshqa stoldagini chaqirish', 'primary ico', false, ' data-seat="' + i + '"');
       if (!DEMO) b += btn('invite-here', iconSvg('i-send') + 'Doʻstni taklif qilish', 'secondary ico', false, ' data-seat="' + i + '"');
     } else if (s.bot || s.auto) {
-      h = '<h2>' + esc(s.name) + '</h2><p class="sub">' + role + ' · ' + (s.bot ? 'bot' : 'oʻrnida bot oʻynayapti') + '</p>';
+      h = '<h2>' + esc(s.name) + '</h2><p class="sub">' + role + ' · ' + (s.bot ? 'bot' : 'oʻrnida bot oʻynayapti') + '</p>' + throwHTML(r, i);
       const can = s.bot ? canManage(r) : r.isHost && !s.online;
       if (can) b += btn('kick-here', 'Stoldan chiqarish', 'danger', S.busy, ' data-seat="' + i + '"');
       else h += '<p class="note">' + (r.mySeat < 0 ? 'Botni stolda oʻtirganlar chiqara oladi.' : 'Faqat stol egasi chiqara oladi.') + '</p>';
       if (r.phase === 'playing' && can) h += '<p class="note">Chiqarilsa, oʻyin toʻxtaydi — boʻsh joyga kimdir oʻtirishi yoki yangi bot qoʻshilishi kerak.</p>';
     } else if (r.isHost && !s.you) {
-      h = '<h2>' + esc(s.name) + '</h2><p class="sub">' + role + (s.online ? '' : ' · oflayn') + '</p>' +
+      h = '<h2>' + esc(s.name) + '</h2><p class="sub">' + role + (s.online ? '' : ' · oflayn') + '</p>' + throwHTML(r, i) +
         '<p class="note">Chiqarilgan oʻyinchi mehmon (kuzatuvchi) boʻlib qoladi.' + (r.phase === 'playing' ? ' Oʻyin toʻxtaydi — boʻsh joyga kimdir oʻtirishi yoki bot qoʻshilishi kerak.' : '') + '</p>';
       b += btn('kick-here', 'Oʻyindan chiqarish', 'danger', S.busy, ' data-seat="' + i + '"');
+    } else if (!s.you) {
+      h = '<h2>' + esc(s.name) + '</h2><p class="sub">' + role + (s.online ? '' : ' · oflayn') + '</p>' + throwHTML(r, i);
+      b += btn('close', 'Yopish', 'secondary');
     } else return '';
     return h + '<div class="lobby-actions">' + b + '</div>';
+  }
+
+  // Sovgʻa / hazil yuborish paneli
+  function throwHTML(r, i) {
+    if (r.mySeat < 0 || DEMO) return '';
+    const all = !!S.throwAll;
+    const cell = function (k, name) { return '<button type="button" class="titem" data-act="throw" data-item="' + k + '" data-seat="' + i + '"><span>' + itemImg(k) + '</span><b>' + name + '</b></button>'; };
+    return '<div class="throw">' +
+      '<div class="tto" role="group"><button type="button" data-act="throwall" data-v="0" aria-pressed="' + !all + '"' + (all ? '' : ' class="on"') + '>' + esc(r.seats[i].name) + 'ga</button>' +
+      '<button type="button" data-act="throwall" data-v="1" aria-pressed="' + all + '"' + (all ? ' class="on"' : '') + '>Hammaga</button></div>' +
+      '<h3>🎁 Sovgʻa <small>— oldiga qoʻyiladi</small></h3><div class="tgrid">' + ITEM_LIST.map(function (x) { return cell(x[0], x[1]); }).join('') + '</div>' +
+      '<h3>😜 Hazil <small>— bir necha soniya koʻrinadi</small></h3><div class="tgrid">' + JOKE_LIST.map(function (x) { return cell(x[0], x[1]); }).join('') + '</div></div>';
+  }
+  // Uchib boradigan sovgʻa/hazil animatsiyasi
+  function throwFx(ev) {
+    const r = S.room;
+    if (!r) return;
+    const me = r.mySeat;
+    const isJoke = ev.kind === 'joke';
+    const nm = (isJoke ? (JOKE_LIST.find(function (x) { return x[0] === ev.item; }) || [, ''])[1] : (ITEMS[ev.item] || {}).name) || '';
+    if ((ev.targets || []).indexOf(me) >= 0) toast(esc(ev.name) + (isJoke ? ' sizga hazil yubordi: ' : ' sizga sovgʻa yubordi: ') + nm, 3500);
+    else if (ev.from === me) toast(isJoke ? 'Hazil yuborildi' : 'Sovgʻa yuborildi', 1800);
+    if (reduceMotion) return;
+    const center = function (s) {
+      const el = app.querySelector('.ava[data-sa="' + s + '"]');
+      if (!el) return null;
+      const b = el.getBoundingClientRect();
+      return { x: b.left + b.width / 2, y: b.top + b.height / 2, w: b.width };
+    };
+    const a = center(ev.from) || { x: innerWidth / 2, y: innerHeight - 120, w: 40 };
+    (ev.targets || []).forEach(function (t, n) {
+      const b = center(t);
+      if (!b) return;
+      const im = document.createElement('img');
+      im.src = '/items/' + ev.item + '.webp?v=1'; im.className = 'fly'; im.alt = '';
+      const sz = 54;
+      im.style.left = (a.x - sz / 2) + 'px'; im.style.top = (a.y - sz / 2) + 'px'; im.style.width = im.style.height = sz + 'px';
+      document.body.appendChild(im);
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const fly = im.animate([
+        { transform: 'translate(0,0) scale(.6) rotate(0deg)', opacity: 0 },
+        { transform: 'translate(' + dx / 2 + 'px,' + (dy / 2 - 90) + 'px) scale(1.15) rotate(' + (isJoke ? 220 : 20) + 'deg)', opacity: 1, offset: .5 },
+        { transform: 'translate(' + dx + 'px,' + dy + 'px) scale(1) rotate(' + (isJoke ? 360 : 0) + 'deg)', opacity: 1 }
+      ], { duration: 650, delay: n * 120, easing: 'cubic-bezier(.3,.6,.3,1)', fill: 'forwards' });
+      fly.onfinish = function () {
+        im.remove();
+        if (!isJoke) return;
+        const pop = document.createElement('img');
+        pop.src = im.src; pop.alt = ''; pop.className = 'joke-pop' + (ev.item === 'pomidor' || ev.item === 'tuxum' ? ' splat' : '');
+        const big = Math.max(70, b.w * 1.5);
+        pop.style.left = (b.x - big / 2) + 'px'; pop.style.top = (b.y - big / 2) + 'px'; pop.style.width = pop.style.height = big + 'px';
+        document.body.appendChild(pop);
+        setTimeout(function () { pop.remove(); }, 4200);
+      };
+    });
   }
 
   // Yangi stol: botsiz (doʻstlar bilan) yoki botlar bilan
@@ -1636,6 +1697,12 @@
         S.sheet = null;
         return send({ t: 'leave' });
       case 'leave-yes': S.sheet = null; render(); return send({ t: 'leave' });
+      case 'throwall': S.throwAll = el.getAttribute('data-v') === '1'; return render();
+      case 'throw': {
+        const to = S.throwAll ? 'all' : Number(el.getAttribute('data-seat'));
+        S.sheet = null; render(); haptic('light');
+        return send({ t: 'throw', to: to, item: el.getAttribute('data-item') });
+      }
       case 'seatmenu': S.sheet = { type: 'seat', seat: Number(el.getAttribute('data-seat')) }; S.sheetAnim = true; return render();
       case 'sit-here': case 'bot-here': case 'kick-here': {
         const seat = Number(el.getAttribute('data-seat'));

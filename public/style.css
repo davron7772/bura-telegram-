@@ -938,3 +938,25 @@ button.hs:focus-visible { outline: 2px solid #fff; outline-offset: 2px; border-r
 .ref-rules { margin: 10px 0; color: var(--muted); font-size: 13px; }
 .ref-rules summary { cursor: pointer; color: var(--text); }
 .ref-tempt { padding: 12px; border-radius: 12px; background: rgba(240, 180, 60, .12); color: var(--text); }
+
+/* Sovgʻa / hazil yuborish */
+.throw h3 { margin: 14px 0 8px; font: 700 16px var(--sans); }
+.throw h3 small { font-weight: 500; color: var(--muted); }
+.tto { display: flex; gap: 6px; padding: 4px; border-radius: 12px; background: rgba(255, 255, 255, .06); }
+.tto button { flex: 1; padding: 9px 6px; border: 0; border-radius: 9px; background: none; color: var(--text); font: 600 14px var(--sans); cursor: pointer; }
+.tto button.on { background: var(--saffron); color: #2a1a05; }
+.tgrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.titem { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 2px 5px; border: 0; border-radius: 12px; background: rgba(247, 236, 223, .06); color: var(--text); font: inherit; cursor: pointer; }
+.titem span { width: 44px; height: 44px; filter: drop-shadow(0 3px 4px rgba(0, 0, 0, .4)); }
+.titem img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.titem b { font-size: 11.5px; font-weight: 600; }
+.titem:active { transform: scale(.94); }
+.fly { position: fixed; z-index: 9000; pointer-events: none; object-fit: contain; filter: drop-shadow(0 6px 8px rgba(0, 0, 0, .5)); }
+.joke-pop { position: fixed; z-index: 8999; pointer-events: none; object-fit: contain; filter: drop-shadow(0 6px 10px rgba(0, 0, 0, .55));
+  animation: jpop 4.2s cubic-bezier(.2, 1.4, .4, 1) forwards; }
+@keyframes jpop { 0% { transform: scale(.2) rotate(-20deg); opacity: 0; } 8% { transform: scale(1.15) rotate(6deg); opacity: 1; }
+  14% { transform: scale(.95) rotate(-4deg); } 20%, 30%, 40%, 50%, 60%, 70% { transform: scale(1) rotate(-6deg); } 25%, 35%, 45%, 55%, 65% { transform: scale(1.04) rotate(6deg); }
+  85% { transform: scale(1) rotate(0); opacity: 1; } 100% { transform: scale(.7) translateY(20px); opacity: 0; } }
+.joke-pop.splat { animation: jsplat 4.2s ease-out forwards; }
+@keyframes jsplat { 0% { transform: scale(.3); opacity: 0; } 6% { transform: scale(1.35, 1.1); opacity: 1; } 12% { transform: scale(1.1); }
+  80% { transform: scale(1.1) translateY(14px); opacity: .95; } 100% { transform: scale(1.1) translateY(30px); opacity: 0; } }

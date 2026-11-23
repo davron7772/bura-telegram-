@@ -126,14 +126,35 @@
   };
 
   // Oʻyinchi oʻz oldiga qoʻyadigan narsa (poker stolidagidek): viski, sigara, tort, pivo
+const JOKES = ['maymun', 'kloun', 'pomidor', 'tuxum', 'eshak', 'tovuq', 'sorgich', 'toshbaqa'];
 const ITEMS = ['whisky', 'cigar', 'cake', 'beer', 'choy', 'osh', 'non', 'anor', 'qovun', 'qahva', 'atirgul', 'kubok', 'toj', 'olmos'];
 P.setItem = function (uid, item) {
   const i = this.seatOf(uid);
   if (i < 0) return 'Avval stolga oʻtiring';
   if (item != null && ITEMS.indexOf(item) < 0) return 'Bunday narsa yoʻq';
   this.seats[i].item = item || null;
+  this.seats[i].gift = null;
   this.changed();
   return null;
+};
+
+// Boshqa oʻyinchiga sovgʻa (uning oldiga qoʻyiladi) yoki hazil (bir necha soniya avatarida turadi)
+P.throwItem = function (uid, to, item) {
+  const from = this.seatOf(uid);
+  if (from < 0) return { error: 'Avval stolga oʻtiring' };
+  const gift = ITEMS.indexOf(item) >= 0, joke = JOKES.indexOf(item) >= 0;
+  if (!gift && !joke) return { error: 'Bunday narsa yoʻq' };
+  const self = this;
+  let targets;
+  if (to === 'all') targets = this.seats.map(function (s, i) { return i; }).filter(function (i) { return i !== from && self.seats[i]; });
+  else {
+    to = Number(to);
+    if (!(to >= 0 && to < this.size) || to === from || !this.seats[to]) return { error: 'Bu oʻrinda hech kim yoʻq' };
+    targets = [to];
+  }
+  if (!targets.length) return { error: 'Stolda boshqa hech kim yoʻq' };
+  if (gift) { targets.forEach(function (i) { self.seats[i].item = item; self.seats[i].gift = self.seats[from].name; }); this.changed(); }
+  return { from: from, to: to === 'all' ? 'all' : to, targets: targets, item: item, kind: gift ? 'gift' : 'joke', name: this.seats[from].name };
 };
 
 P.fixHost = function () {
@@ -687,7 +708,7 @@ P.fixHost = function () {
           you: s.id === uid,
           team: E.teamOf(i),
           ready: !!(s.bot || s.ready),
-          item: s.item || null
+          item: s.item || null, gift: s.item && s.gift ? s.gift : null
         };
       }),
       readyIn: this.readyAt ? Math.max(0, this.readyAt - this.now()) : 0,
@@ -709,5 +730,5 @@ P.fixHost = function () {
     };
   };
 
-  return { Room: Room, SEATS: SEATS };
+  return { Room: Room, SEATS: SEATS, ITEMS: ITEMS, JOKES: JOKES };
 });
