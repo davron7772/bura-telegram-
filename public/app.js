@@ -51,12 +51,12 @@
   const POS = ['b', 'l', 't', 'r']; // men, chapdagi raqib, sherik (roʻparada), oʻngdagi raqib
   const AVATAR_BG = ['#2a2f57', '#7a2a31', '#1f4a4f', '#5b4223'];
   // 3D stol (yogʻoch hoshiya, tilla chiziq, movut) — faqat 3D koʻrinishda chiqadi
-  const T3D = '<div class="t3d" aria-hidden="true"><div class="t3-in"><i class="t3-thick"></i><i class="t3-rim"></i><i class="t3-felt"><img class="t3-logo" src="/brand/soma.svg?v=1" alt="" draggable="false"></i></div></div>';
+  const T3D = '<div class="t3d" aria-hidden="true"><div class="t3-in"><i class="t3-thick"></i><i class="t3-rim"></i><i class="t3-felt"><img class="t3-logo" src="/brand/uzb.webp?v=1" alt="" draggable="false"></i></div></div>';
   const GUL = '<svg class="gul" viewBox="0 0 240 150" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2">' +
     '<path d="M84 8h72l52 34v66l-52 34H84L32 108V42z"/><path d="M92 24h56l38 24v54l-38 24H92L54 102V48z"/>' +
     '<path d="M120 38l30 37-30 37-30-37z"/><path d="M120 58l14 17-14 17-14-17z" fill="currentColor"/>' +
     '<path d="M32 75H6M208 75h26M120 8V0M120 142v8M60 75l-12-10v20zM180 75l12-10v20z"/></g></svg>' +
-    '<img class="gul-logo" src="/brand/soma.svg?v=1" alt="" draggable="false" aria-hidden="true">';
+    '<img class="gul-logo" src="/brand/uzb.webp?v=1" alt="" draggable="false" aria-hidden="true">';
 
   const S = {
     newSize: (function () { try { return localStorage.getItem('bura.size') === '2' ? 2 : 4; } catch (e) { return 4; } })(),

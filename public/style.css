@@ -830,7 +830,7 @@ button.hs:focus-visible { outline: 2px solid #fff; outline-offset: 2px; border-r
   background: radial-gradient(circle, transparent 46%, rgba(240, 180, 60, .55) 47%, rgba(240, 180, 60, .55) 48.5%, transparent 49.5%), repeating-conic-gradient(rgba(240, 180, 60, .2) 0 7deg, transparent 7deg 22.5deg);
   -webkit-mask: radial-gradient(circle, #000 0 50%, transparent 51%); mask: radial-gradient(circle, #000 0 50%, transparent 51%);
 }
-.v3d .t3-felt .t3-logo { position: absolute; left: 50%; top: 46%; width: 128px; transform: translate(-50%, -50%); opacity: .92; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .45)); pointer-events: none; }
+.v3d .t3-felt .t3-logo { position: absolute; left: 50%; top: 46%; width: 104px; transform: translate(-50%, -50%); opacity: .92; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .45)); pointer-events: none; }
 .v3d .t3-felt b { position: absolute; left: 50%; top: 46%; transform: translate(-50%, -50%); font: 800 30px var(--serif); letter-spacing: .14em; color: rgba(240, 180, 60, .28); }
 .v3d .field > :not(.t3d) { position: relative; z-index: 1; }
 
