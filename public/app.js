@@ -480,7 +480,7 @@
   // Oʻyinchi oʻz oldiga qoʻyadigan narsalar (poker stolidagidek)
   // Stol predmetlari — Figma AI'da yaratilgan 3D rasmlar (public/items/*.webp)
   const ITEM_LIST = [['choy', 'Choy'], ['osh', 'Osh'], ['non', 'Non'], ['anor', 'Anor'], ['qovun', 'Qovun'], ['qahva', 'Qahva'],
-    ['cake', 'Tort'], ['atirgul', 'Atirgul'], ['kubok', 'Kubok'], ['toj', 'Toj'], ['olmos', 'Olmos'],
+    ['cake', 'Tort'], ['atirgul', 'Atirgul'], ['bayroq', 'Bayroq'], ['tuz', 'Oltin tuz'], ['kubok', 'Kubok'], ['toj', 'Toj'], ['olmos', 'Olmos'],
     ['whisky', 'Viski'], ['beer', 'Pivo'], ['cigar', 'Sigara']];
   const JOKE_LIST = [['maymun', 'Maymun'], ['kloun', 'Kloun'], ['pomidor', 'Pomidor'], ['tuxum', 'Tuxum'], ['eshak', 'Eshak'], ['tovuq', 'Qoʻrqoq'], ['sorgich', 'Soʻrgʻich'], ['toshbaqa', 'Toshbaqa']];
   const ITEMS = {};

@@ -486,6 +486,8 @@
     'Sovgʻa yuborildi': 'Подарок отправлен',
     'Hazil yuborildi': 'Шутка отправлена',
     'Biroz kuting — juda tez yuboryapsiz': 'Подождите — слишком часто',
+    'Bayroq': 'Флаг',
+    'Oltin tuz': 'Золотой туз',
     'Viski': 'Виски',
     'Sigara': 'Сигара',
     'Tort': 'Торт',
