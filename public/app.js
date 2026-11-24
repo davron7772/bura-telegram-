@@ -1405,7 +1405,7 @@
   // Oʻyinchilar samaradorligi (server tahlili)
   function statsHTML() {
     const d = S.stats;
-    let h = '<h2>Oʻyinchilar reytingi</h2><p class="sub">Reyting = mahorat × 10 + tajriba. Mahorat — toʻgʻri yurishlar (50%), yutish (30%) va olingan ochko (20%); kam oʻynaganlarda u oʻrtacha darajaga yaqin turadi. Tajriba — har oʻynalgan raund uchun ball (botlarga qarshi — yarmi).</p>';
+    let h = '<h2>Oʻyinchilar reytingi</h2><p class="sub">Reyting = mahorat × 10 + tajriba − magʻlubiyatlar. Mahorat — toʻgʻri yurishlar (50%), yutish (30%) va olingan ochko (20%); kam oʻynaganlarda u oʻrtacha darajaga yaqin turadi. Tajriba — har oʻynalgan raund uchun ball (botlarga qarshi — yarmi). Har bir yutqazilgan raund uchun −1 ball.</p>';
     if (!d) return h + '<p class="status">Yuklanmoqda…</p>';
     const T = d.total;
     if (T && T.players) {
@@ -1423,7 +1423,7 @@
       return '<li class="eff-row' + (d.me && d.me.id === u.id ? ' me' : '') + (u.ranked ? '' : ' new') + '">' +
         '<span class="eff-n">' + (u.ranked ? i + 1 : '·') + '</span>' +
         '<span class="eff-who"><b>' + esc(u.name) + (d.me && d.me.id === u.id ? ' <i>(siz)</i>' : '') + '</b>' +
-        '<small>' + 'mahorat ' + sk + '% · tajriba +' + (u.xp || 0) + ' · ' + u.rounds + ' raund</small>' +
+        '<small>' + 'mahorat ' + sk + '% · tajriba +' + (u.xp || 0) + (u.loss ? ' · magʻlubiyat −' + u.loss : '') + ' · ' + u.rounds + ' raund</small>' +
         '<small>' + 'toʻgʻri yurish ' + u.acc + '% · yutish ' + u.win + '% · oʻrtacha ' + u.avg + ' ochko</small>' +
         (u.visits ? '<small>' + u.visits + ' marta kirgan · ' + u.days + ' kun · ' + u.playH + ' soat oʻynagan</small>' : '') +
         '<span class="eff-bar"><span class="' + lvl + '" style="width:' + sk + '%"></span></span></span>' +

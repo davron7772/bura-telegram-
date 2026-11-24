@@ -306,7 +306,9 @@ function xpOf(u) {
   const r = u.xp != null ? u.xp : (u.rounds || 0);
   return Math.round(150 * Math.log(1 + r / 10));
 }
-function ratingOf(u) { return Math.round(skillOf(u) * 10) + xpOf(u); }
+// Har bir yutqazilgan raund uchun −1 ball (durang hisoblanmaydi)
+function lossOf(u) { return Math.max(0, (u.rounds || 0) - (u.wins || 0) - (u.draws || 0)); }
+function ratingOf(u) { return Math.round(skillOf(u) * 10) + xpOf(u) - lossOf(u); }
 
 function effOf(u) {
   const q = u.moves ? u.good / u.moves : 0;
@@ -324,6 +326,7 @@ P.view = function (u) {
     eff: effOf(u),
     skill: Math.round(skillOf(u)),
     xp: xpOf(u),
+    loss: lossOf(u),
     rating: ratingOf(u),
     acc: u.moves ? Math.round((u.good / u.moves) * 100) : 0,
     win: u.rounds ? Math.round(((u.wins + u.draws * 0.5) / u.rounds) * 100) : 0,
@@ -351,7 +354,7 @@ P.me = function (id) {
   return u ? this.view(u) : null;
 };
 
-module.exports = { Stats: Stats, judge: judge, effOf: effOf, skillOf: skillOf, xpOf: xpOf, ratingOf: ratingOf, MIN_ROUNDS: MIN_ROUNDS };
+module.exports = { Stats: Stats, judge: judge, effOf: effOf, skillOf: skillOf, xpOf: xpOf, ratingOf: ratingOf, lossOf: lossOf, MIN_ROUNDS: MIN_ROUNDS };
 
 // Xona uchun: yurishni tahlil qilib yozish
 Stats.prototype.check = function (st, seat, a, auto, who) {

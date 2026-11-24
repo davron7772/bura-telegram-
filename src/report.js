@@ -15,7 +15,7 @@ function report(S, u) {
   L.push('🎓 <b>Oʻyin tahlili: ' + name + '</b>', '');
   L.push('<b>Umumiy koʻrsatkichlar</b>');
   L.push('🃏 ' + u.rounds + ' raund · ⏱ ' + Math.round((u.playMs || 0) / 360000) / 10 + ' soat · ' + (u.days || 0) + ' kun');
-  L.push('⭐ Reyting: ' + ST.ratingOf(u) + ' ball (mahorat ' + Math.round(ST.skillOf(u)) + '%, tajriba +' + ST.xpOf(u) + ')' + (rank >= 0 ? ' — ' + (rank + 1) + '-oʻrin' : ''));
+  L.push('⭐ Reyting: ' + ST.ratingOf(u) + ' ball (mahorat ' + Math.round(ST.skillOf(u)) + '%, tajriba +' + ST.xpOf(u) + ', magʻlubiyat −' + ST.lossOf(u) + ')' + (rank >= 0 ? ' — ' + (rank + 1) + '-oʻrin' : ''));
   L.push('✅ Toʻgʻri yurishlar: ' + pct(u.good, u.moves) + '% (' + u.moves + ' yurishdan)');
   L.push('🏆 Yutgan raundlar: ' + pct(u.wins + u.draws * 0.5, u.rounds) + '%');
   const fairAvg = u.fair && u.rounds ? u.fair / u.rounds : 0;
